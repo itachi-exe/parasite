@@ -170,14 +170,18 @@ export function useRole(opts: {
       // Parasite's real jumps ever interrupted the cadence.
       const delay = 25_000 + Math.random() * 35_000;
       decoyTimer.current = setTimeout(async () => {
-        // Non-Parasites send decoys. The Parasite's real jumps are player-driven
-        // and go through `submitJump` below; they also send decoys when idle so
-        // their transaction rate matches everyone else's.
-        const alive = state?.players.filter((p) => p.alive && p.seat !== mySeat) ?? [];
-        if (alive.length > 0) {
-          const victim = alive[Math.floor(Math.random() * alive.length)]!;
-          await submitJump(victim.seat, true).catch(() => {});
-        }
+        // ⚠️ A decoy MUST target the sender's OWN seat.
+        //
+        // The contract computes `hostSeat = select(callerIsHost, target, hostSeat)`.
+        // For a non-Parasite that is a no-op whatever the target is — but for the
+        // Parasite `callerIsHost` is TRUE, so a decoy aimed at a random player is
+        // a REAL jump and would silently hand the role away every ~40 seconds.
+        // Targeting your own seat collapses to `select(true, mySeat, mySeat)`,
+        // which is a no-op for the Parasite and still a no-op for everyone else.
+        //
+        // This costs nothing in cover: the target is encrypted, so an observer
+        // cannot tell a self-target from any other, and the tx is byte-identical.
+        await submitJump(mySeat, true).catch(() => {});
         schedule();
       }, delay);
     };

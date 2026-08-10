@@ -218,6 +218,33 @@ describe('ParasiteGame', () => {
         .be.reverted;
     });
 
+    it('a self-targeted decoy is a no-op EVEN FOR THE PARASITE', async () => {
+      // Regression test for a client bug: the decoy scheduler originally aimed
+      // at a random *other* player. For a human that is harmless, but for the
+      // Parasite `callerIsHost` is true, so `select` executes and the "decoy"
+      // is a real jump — the Parasite would silently lose the role to a random
+      // player roughly every 40 seconds.
+      //
+      // Self-targeting is the fix: select(true, mySeat, mySeat) is a no-op for
+      // the Parasite, and select(false, ...) is already a no-op for everyone
+      // else. The target is encrypted, so this costs nothing in cover.
+      expect(await isParasite(1)).to.equal(true);
+
+      // The Parasite decoys at itself.
+      await game.connect(signers[1]).jump(1, encSeat(1), { value: await jumpFee(N) });
+      expect(await isParasite(1)).to.equal(true, 'a self-decoy must not move the host');
+
+      // A human decoys at itself.
+      await game.connect(signers[3]).jump(1, encSeat(3), { value: await jumpFee(N) });
+      expect(await isParasite(3)).to.equal(false, 'a human self-decoy must not grant the role');
+      expect(await isParasite(1)).to.equal(true, 'the Parasite must still be seat 1');
+
+      // Contrast: aiming elsewhere as the Parasite really does move the role.
+      await game.connect(signers[1]).jump(1, encSeat(4), { value: await jumpFee(N) });
+      expect(await isParasite(1)).to.equal(false);
+      expect(await isParasite(4)).to.equal(true);
+    });
+
     it('emits an identical event shape for real jumps and decoys', async () => {
       const realTx = await game.connect(signers[1]).jump(1, encSeat(2), { value: await jumpFee(N) });
       const realRc = await realTx.wait();
