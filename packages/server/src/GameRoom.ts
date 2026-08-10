@@ -612,11 +612,18 @@ export class GameRoom {
         emits.push(...this.endGame('crew', 'crew-ejected-parasite'));
         return emits;
       }
-      emits.push(...this.checkParasiteWin());
-      if (this.phase !== 'ended') {
-        emits.push(...this.checkCrewTaskWin());
+
+      // Note: checkParasiteWin/checkCrewTaskWin may set phase to 'ended' as a
+      // side effect, which TypeScript cannot see through the method call — hence
+      // checking their return values rather than re-reading this.phase, which
+      // narrows to 'playing' after the assignment above.
+      const parasiteWin = this.checkParasiteWin();
+      emits.push(...parasiteWin);
+      if (parasiteWin.length === 0) {
+        const crewWin = this.checkCrewTaskWin();
+        emits.push(...crewWin);
+        if (crewWin.length === 0) emits.push({ type: 'state' });
       }
-      if (this.phase !== 'ended') emits.push({ type: 'state' });
     }
     return emits;
   }
