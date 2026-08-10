@@ -1,0 +1,294 @@
+import { Server } from 'socket.io';
+import type { Socket } from 'socket.io';
+import {
+  TICK_MS,
+  LocalRoleOracle,
+  type ClientToServerEvents,
+  type ServerToClientEvents,
+  type RoomState,
+} from '@parasite/shared';
+import { GameRoom, type Emit, type MeetingTimings } from './GameRoom.js';
+
+export interface GameServerConfig {
+  contractAddress: string | null;
+  /** Positions are broadcast every N ticks to keep bandwidth sane. */
+  positionEveryTicks?: number;
+  /** Meeting stage durations. Defaults to the shared constants. */
+  timings?: Partial<MeetingTimings>;
+}
+
+/**
+ * Socket.io adapter over GameRoom.
+ *
+ * Thin on purpose: it translates events to method calls, fans out whatever the
+ * room asks it to broadcast, and drives the tick loop. All rules live in
+ * GameRoom so they can be tested without a socket.
+ */
+export class GameServer {
+  readonly io: Server<ClientToServerEvents, ServerToClientEvents>;
+  private rooms = new Map<string, GameRoom>();
+  private socketRoom = new Map<string, string>();
+  private timer: NodeJS.Timeout | null = null;
+  private tickCount = 0;
+  private config: GameServerConfig;
+
+  constructor(
+    io: Server<ClientToServerEvents, ServerToClientEvents>,
+    config: GameServerConfig
+  ) {
+    this.io = io;
+    this.config = config;
+    this.wire();
+    this.start();
+  }
+
+  /**
+   * Role backend selection. With a contract address configured we run in Inco
+   * mode and the server holds NO oracle — it cannot learn any role. Without one
+   * we fall back to a clearly-labelled in-process simulation so the game is
+   * still playable end to end.
+   */
+  private roleMode(): 'inco' | 'simulated' {
+    return this.config.contractAddress ? 'inco' : 'simulated';
+  }
+
+  private getRoom(code: string): GameRoom {
+    const key = code.trim().toUpperCase() || 'VIRELIA';
+    let room = this.rooms.get(key);
+    if (!room) {
+      const mode = this.roleMode();
+      room = new GameRoom({
+        code: key,
+        roleMode: mode,
+        contractAddress: this.config.contractAddress,
+        // Only ever constructed in simulated mode — see the class comment.
+        localOracle: mode === 'simulated' ? new LocalRoleOracle() : undefined,
+        timings: this.config.timings,
+      });
+      this.rooms.set(key, room);
+    }
+    return room;
+  }
+
+  private wire(): void {
+    this.io.on('connection', (socket) => {
+      socket.on('join', async (payload, ack) => {
+        const code = (payload?.code ?? 'VIRELIA').trim().toUpperCase() || 'VIRELIA';
+        const room = this.getRoom(code);
+        const { result, player } = room.join(
+          socket.id,
+          payload?.name ?? '',
+          payload?.skin ?? 0,
+          payload?.address ?? null
+        );
+
+        if (!result.ok || !player) {
+          ack?.({ ok: false, error: result.error });
+          return;
+        }
+
+        this.socketRoom.set(socket.id, code);
+        await socket.join(code);
+        socket.emit('you', { id: player.id, seat: player.seat });
+        ack?.({
+          ok: true,
+          you: { id: player.id, seat: player.seat },
+          state: room.toState(),
+        });
+        this.broadcastState(room);
+      });
+
+      socket.on('startGame', async (ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        const res = await room.startGame(socket.id);
+        if (!res.ok) return ack?.(res);
+
+        ack?.({ ok: true });
+        this.io.to(room.code).emit('gameStarted', {
+          chainGameId: room.chainGameId,
+          seats: [...room.players.values()].map((p) => ({
+            seat: p.seat,
+            address: p.address,
+          })),
+        });
+        this.broadcastState(room);
+      });
+
+      socket.on('input', (payload) => {
+        const room = this.roomOf(socket);
+        room?.setInput(socket.id, payload?.ax ?? 0, payload?.ay ?? 0);
+      });
+
+      socket.on('completeTask', (payload, ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        const { result, emits } = room.completeTask(socket.id, payload.taskId);
+        ack?.(result);
+        void this.flush(room, emits);
+      });
+
+      socket.on('taskProgress', (_payload, ack) => {
+        // Intermediate progress is purely cosmetic and client-local; the server
+        // only records completion (and re-checks proximity when it does).
+        ack?.({ ok: true });
+      });
+
+      socket.on('callMeeting', (ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        const { result, emits } = room.callMeeting(socket.id);
+        ack?.(result);
+        void this.flush(room, emits);
+      });
+
+      socket.on('reportBody', (payload, ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        const { result, emits } = room.reportBody(socket.id, payload.victimSeat);
+        ack?.(result);
+        void this.flush(room, emits);
+      });
+
+      socket.on('castVote', (payload, ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        const result = room.castVote(socket.id, payload.target);
+        ack?.(result);
+        if (result.ok) this.broadcastState(room);
+      });
+
+      socket.on('purge', (payload, ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        const { result, emits } = room.purge(socket.id, payload.targetSeat);
+        ack?.(result);
+        void this.flush(room, emits);
+      });
+
+      socket.on('jumpAnnounce', (payload, ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        // Returns the same answer for real jumps and decoys.
+        ack?.(room.jumpAnnounce(socket.id, payload.targetSeat));
+      });
+
+      socket.on('submitEjectionReveal', (payload, ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        // Inco mode: any client that performed the on-chain reveal may report it.
+        // The value is public by then (e.reveal made it so), so this is not a
+        // trust escalation.
+        const emits = room.submitEjectionReveal(payload.wasParasite);
+        ack?.({ ok: true });
+        void this.flush(room, emits);
+      });
+
+      socket.on('leaveLobby', (ack) => {
+        const room = this.roomOf(socket);
+        if (room) {
+          room.disconnect(socket.id);
+          void socket.leave(room.code);
+          this.socketRoom.delete(socket.id);
+          this.cleanup(room);
+          this.broadcastState(room);
+        }
+        ack?.({ ok: true });
+      });
+
+      socket.on('disconnect', () => {
+        const room = this.roomOf(socket);
+        if (!room) return;
+        room.disconnect(socket.id);
+        this.socketRoom.delete(socket.id);
+        this.cleanup(room);
+        this.broadcastState(room);
+      });
+    });
+  }
+
+  private roomOf(socket: Socket): GameRoom | undefined {
+    const code = this.socketRoom.get(socket.id);
+    return code ? this.rooms.get(code) : undefined;
+  }
+
+  private cleanup(room: GameRoom): void {
+    if (room.isEmpty()) this.rooms.delete(room.code);
+  }
+
+  private broadcastState(room: GameRoom): void {
+    if (!this.rooms.has(room.code)) return;
+    const state: RoomState = room.toState();
+    this.io.to(room.code).emit('state', state);
+  }
+
+  /** Fan out a batch of room emits, then run any follow-up local resolution. */
+  private async flush(room: GameRoom, emits: Emit[]): Promise<void> {
+    for (const e of emits) {
+      switch (e.type) {
+        case 'state':
+          this.broadcastState(room);
+          break;
+        case 'meetingStarted':
+          this.io.to(room.code).emit('meetingStarted', {
+            reason: e.reason,
+            endsAt: e.endsAt,
+          });
+          break;
+        case 'meetingResult':
+          this.io.to(room.code).emit('meetingResult', e.result);
+          break;
+        case 'gameEnded':
+          this.io.to(room.code).emit('gameEnded', e.end);
+          break;
+        case 'playerPurged':
+          this.io.to(room.code).emit('playerPurged', {
+            victimSeat: e.victimSeat,
+            x: e.x,
+            y: e.y,
+          });
+          break;
+        case 'toast':
+          if (e.to) this.io.to(e.to).emit('toast', { kind: e.kind, text: e.text });
+          else this.io.to(room.code).emit('toast', { kind: e.kind, text: e.text });
+          break;
+        case 'gameStarted':
+          break;
+      }
+    }
+
+    // Simulated mode resolves its own reveals; Inco mode waits for a client.
+    const follow: Emit[] = [
+      ...(await room.resolveEjectionLocally()),
+      ...(await room.resolveFinalRevealLocally()),
+    ];
+    if (follow.length) await this.flush(room, follow);
+  }
+
+  private start(): void {
+    const every = this.config.positionEveryTicks ?? 2;
+    this.timer = setInterval(() => {
+      this.tickCount++;
+      for (const room of [...this.rooms.values()]) {
+        const emits = room.tick();
+        if (emits.length) void this.flush(room, emits);
+        if (
+          (room.phase === 'playing' || room.phase === 'meeting') &&
+          this.tickCount % every === 0
+        ) {
+          this.io.to(room.code).emit('positions', room.positionsPayload());
+        }
+      }
+    }, TICK_MS);
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  /** Exposed for tests. */
+  roomFor(code: string): GameRoom | undefined {
+    return this.rooms.get(code.toUpperCase());
+  }
+}
