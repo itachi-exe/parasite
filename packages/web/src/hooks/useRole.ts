@@ -1,0 +1,273 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPublicClient, createWalletClient, custom, http, type PublicClient } from 'viem';
+import { baseSepolia } from 'viem/chains';
+import type { RoomState, Seat } from '@parasite/shared';
+import {
+  PARASITE_GAME_ABI,
+  PARASITE_GAME_ADDRESS,
+  BASE_SEPOLIA_RPC,
+} from '@/lib/contract';
+import { decryptMyRole, encryptSeat, revealEjectedSeat, type ChainWalletClient } from '@/lib/incoOracle';
+
+export type RoleMode = 'inco' | 'simulated';
+
+export interface RoleState {
+  mode: RoleMode;
+  /** null until the role is known to this client. */
+  isParasite: boolean | null;
+  /** Human-readable status for the HUD. */
+  status: string;
+  busy: boolean;
+  error: string | null;
+}
+
+/**
+ * The client half of the confidentiality design.
+ *
+ * ── Inco mode (a contract address is configured) ─────────────────────────────
+ * The role is read by calling `myRoleHandle` (msg.sender-scoped) and then
+ * `attestedDecrypt`, which requires this wallet's EIP-712 signature. Nothing
+ * else in the system — not the server, not other clients — can perform that
+ * decrypt.
+ *
+ * Jumps go on-chain as `jump(gameId, encryptedSeat)`. Crucially, this hook also
+ * emits DECOY jumps from non-Parasite players on a jitter, because a contract
+ * that is safe to call is not enough on its own: if only the Parasite ever sent
+ * a jump transaction, the *existence* of the transaction would identify them.
+ * The contract makes decoys free of effect; this makes them free of suspicion.
+ *
+ * ── Simulated mode (no contract address) ─────────────────────────────────────
+ * Falls back to a server-derived role so the game is playable without a wallet.
+ * The HUD always states which mode is live — see RoleBadge.
+ */
+export function useRole(opts: {
+  state: RoomState | null;
+  mySeat: Seat | null;
+  address: `0x${string}` | null;
+  /**
+   * SIMULATED MODE ONLY: the role the server privately sent this socket.
+   * Always null in Inco mode, where the role is decrypted from chain instead.
+   */
+  simulatedRole: boolean | null;
+  onToast: (kind: 'info' | 'warn' | 'error', text: string) => void;
+}) {
+  const { state, mySeat, address, simulatedRole, onToast } = opts;
+
+  const mode: RoleMode = PARASITE_GAME_ADDRESS ? 'inco' : 'simulated';
+  const [role, setRole] = useState<RoleState>({
+    mode,
+    isParasite: null,
+    status: mode === 'inco' ? 'Awaiting encrypted role…' : 'Awaiting role…',
+    busy: false,
+    error: null,
+  });
+
+  const publicClient = useRef<PublicClient | null>(null);
+  const decoyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastGameId = useRef<string | null>(null);
+
+  if (!publicClient.current && typeof window !== 'undefined') {
+    publicClient.current = createPublicClient({
+      chain: baseSepolia,
+      transport: http(BASE_SEPOLIA_RPC),
+    }) as PublicClient;
+  }
+
+  const walletClient = useCallback((): ChainWalletClient | null => {
+    if (typeof window === 'undefined') return null;
+    const eth = (window as unknown as { ethereum?: unknown }).ethereum;
+    if (!eth || !address) return null;
+    return createWalletClient({
+      chain: baseSepolia,
+      account: address,
+      transport: custom(eth as never),
+    }) as ChainWalletClient;
+  }, [address]);
+
+  const chainGameId = state?.chainGameId ?? null;
+
+  // ── Simulated mode: the server hands each socket its own role ──────────────
+  useEffect(() => {
+    if (mode !== 'simulated') return;
+    if (simulatedRole === null) return;
+    setRole({
+      mode,
+      isParasite: simulatedRole,
+      status: simulatedRole ? 'PARASITE' : 'HUMAN',
+      busy: false,
+      error: null,
+    });
+  }, [mode, simulatedRole]);
+
+  // ── Inco mode: decrypt my own role from chain once the game starts ─────────
+  useEffect(() => {
+    if (mode !== 'inco') return;
+    if (!chainGameId || mySeat === null) return;
+    if (lastGameId.current === chainGameId) return;
+    lastGameId.current = chainGameId;
+
+    let cancelled = false;
+
+    (async () => {
+      const wc = walletClient();
+      if (!wc || !publicClient.current || !PARASITE_GAME_ADDRESS) {
+        setRole((r) => ({
+          ...r,
+          status: 'Connect a wallet to decrypt your role',
+          error: 'no wallet',
+        }));
+        return;
+      }
+
+      setRole((r) => ({ ...r, busy: true, status: 'Decrypting role via Inco…' }));
+      try {
+        const isParasite = await decryptMyRole({
+          rpcUrl: BASE_SEPOLIA_RPC,
+          publicClient: publicClient.current,
+          walletClient: wc,
+          contractAddress: PARASITE_GAME_ADDRESS,
+          gameId: BigInt(chainGameId),
+        });
+        if (cancelled) return;
+        setRole({
+          mode,
+          isParasite,
+          status: isParasite ? 'PARASITE' : 'HUMAN',
+          busy: false,
+          error: null,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        setRole((r) => ({ ...r, busy: false, status: 'Role decrypt failed', error: msg }));
+        onToast('error', `Could not decrypt your role: ${msg}`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chainGameId, mySeat, mode, walletClient, onToast]);
+
+  // ── Decoy jump traffic ─────────────────────────────────────────────────────
+  /**
+   * Every living player periodically sends a jump transaction, whether or not
+   * they are the Parasite. The contract turns non-Parasite jumps into no-ops
+   * (via e.select) so this is harmless — and it is what makes the real jump
+   * unobservable, since a jump tx no longer implies anything about the sender.
+   *
+   * Only runs in Inco mode: in simulated mode there is no chain to observe.
+   */
+  useEffect(() => {
+    if (mode !== 'inco') return;
+    if (!chainGameId || mySeat === null || state?.phase !== 'playing') return;
+    if (role.isParasite === null) return; // wait until we know, so we don't decoy blind
+
+    const schedule = () => {
+      // Jitter hard: a fixed interval would itself be a fingerprint if the
+      // Parasite's real jumps ever interrupted the cadence.
+      const delay = 25_000 + Math.random() * 35_000;
+      decoyTimer.current = setTimeout(async () => {
+        // Non-Parasites send decoys. The Parasite's real jumps are player-driven
+        // and go through `submitJump` below; they also send decoys when idle so
+        // their transaction rate matches everyone else's.
+        const alive = state?.players.filter((p) => p.alive && p.seat !== mySeat) ?? [];
+        if (alive.length > 0) {
+          const victim = alive[Math.floor(Math.random() * alive.length)]!;
+          await submitJump(victim.seat, true).catch(() => {});
+        }
+        schedule();
+      }, delay);
+    };
+    schedule();
+
+    return () => {
+      if (decoyTimer.current) clearTimeout(decoyTimer.current);
+      decoyTimer.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, chainGameId, mySeat, state?.phase, role.isParasite]);
+
+  /**
+   * Send a jump transaction.
+   *
+   * `decoy` only affects local UX (whether we surface errors to the player); the
+   * transaction itself is byte-identical either way, which is the entire point.
+   */
+  const submitJump = useCallback(
+    async (targetSeat: Seat, decoy = false) => {
+      if (mode !== 'inco' || !chainGameId || !PARASITE_GAME_ADDRESS || !address) return;
+      const wc = walletClient();
+      if (!wc || !publicClient.current) return;
+
+      const gameId = BigInt(chainGameId);
+      const ciphertext = await encryptSeat({
+        rpcUrl: BASE_SEPOLIA_RPC,
+        seat: targetSeat,
+        accountAddress: address,
+        dappAddress: PARASITE_GAME_ADDRESS,
+      });
+
+      const fee = (await publicClient.current.readContract({
+        address: PARASITE_GAME_ADDRESS,
+        abi: PARASITE_GAME_ABI,
+        functionName: 'jumpFee',
+        args: [gameId],
+      })) as bigint;
+
+      await wc.writeContract({
+        address: PARASITE_GAME_ADDRESS,
+        abi: PARASITE_GAME_ABI,
+        functionName: 'jump',
+        args: [gameId, ciphertext],
+        value: fee,
+        chain: baseSepolia,
+        account: wc.account,
+      });
+
+      if (!decoy) {
+        // Re-read our own role: if we jumped, we are no longer the host.
+        const isParasite = await decryptMyRole({
+          rpcUrl: BASE_SEPOLIA_RPC,
+          publicClient: publicClient.current,
+          walletClient: wc,
+          contractAddress: PARASITE_GAME_ADDRESS,
+          gameId,
+        }).catch(() => null);
+        if (isParasite !== null) {
+          setRole((r) => ({
+            ...r,
+            isParasite,
+            status: isParasite ? 'PARASITE' : 'HUMAN',
+          }));
+        }
+      }
+    },
+    [mode, chainGameId, address, walletClient]
+  );
+
+  /** Read the public "was this seat the Parasite" bit after an ejection. */
+  const readEjectionReveal = useCallback(
+    async (seat: Seat): Promise<boolean | null> => {
+      if (mode !== 'inco' || !chainGameId || !PARASITE_GAME_ADDRESS || !publicClient.current) {
+        return null;
+      }
+      try {
+        return await revealEjectedSeat({
+          rpcUrl: BASE_SEPOLIA_RPC,
+          publicClient: publicClient.current,
+          contractAddress: PARASITE_GAME_ADDRESS,
+          gameId: BigInt(chainGameId),
+          seat,
+        });
+      } catch {
+        return null;
+      }
+    },
+    [mode, chainGameId]
+  );
+
+  return { role, submitJump, readEjectionReveal };
+}
