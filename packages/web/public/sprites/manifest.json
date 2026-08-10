@@ -1,0 +1,41 @@
+{
+  "source": "assets/characters.jpg",
+  "sprites": [
+    {
+      "name": "human-0",
+      "file": "human-0.png",
+      "width": 176,
+      "height": 448
+    },
+    {
+      "name": "human-1",
+      "file": "human-1.png",
+      "width": 169,
+      "height": 428
+    },
+    {
+      "name": "human-2",
+      "file": "human-2.png",
+      "width": 175,
+      "height": 443
+    },
+    {
+      "name": "human-3",
+      "file": "human-3.png",
+      "width": 178,
+      "height": 443
+    },
+    {
+      "name": "infected",
+      "file": "infected.png",
+      "width": 178,
+      "height": 444
+    },
+    {
+      "name": "parasite",
+      "file": "parasite.png",
+      "width": 212,
+      "height": 460
+    }
+  ]
+}
