@@ -1,0 +1,35 @@
+{
+  "name": "parasite",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Parasite — a real-time multiplayer social deduction game with Inco-encrypted hidden roles",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/web",
+    "packages/contracts"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "sprites": "node scripts/slice-characters.mjs",
+    "build:shared": "npm run build -w @parasite/shared",
+    "dev": "npm run build:shared && concurrently -n server,web -c magenta,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev -w @parasite/server",
+    "dev:web": "npm run dev -w @parasite/web",
+    "build": "npm run build:shared && npm run build -w @parasite/server && npm run build -w @parasite/web",
+    "test": "npm run test -w @parasite/shared && npm run test -w @parasite/server && npm run test -w @parasite/contracts",
+    "test:shared": "npm run test -w @parasite/shared",
+    "test:server": "npm run test -w @parasite/server",
+    "test:contracts": "npm run test -w @parasite/contracts",
+    "compile:contracts": "npm run compile -w @parasite/contracts",
+    "deploy:baseSepolia": "npm run deploy:baseSepolia -w @parasite/contracts",
+    "typecheck": "npm run typecheck -w @parasite/shared && npm run typecheck -w @parasite/server && npm run typecheck -w @parasite/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}

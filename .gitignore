@@ -1,6 +1,35 @@
+# deps
+node_modules/
+.pnp
+.pnp.js
+
+# env — never commit real keys
 .env
 .env.*
 !.env.example
-node_modules/
-__pycache__/
+
+# next
+.next/
+out/
+next-env.d.ts
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# contracts
+artifacts/
+cache/
+typechain-types/
+
+# logs / os
 *.log
+npm-debug.log*
+__pycache__/
+.DS_Store
+coverage/
+.probe/
+
+# generated sprites ARE committed on purpose (see scripts/slice-characters.mjs)
+# so the app runs without a build step; the source sheet stays in assets/
