@@ -1,0 +1,8 @@
+{
+  "network": "hardhat",
+  "chainId": 84532,
+  "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "incoSingleton": "0xe9CB49A5b16C6D4a093E5900AA8b450FD40541B6",
+  "deployedAt": "2026-08-10T21:58:24.098Z"
+}
