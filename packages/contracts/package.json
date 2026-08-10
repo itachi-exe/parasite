@@ -1,0 +1,20 @@
+{
+  "name": "@parasite/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:baseSepolia": "hardhat run scripts/deploy.ts --network baseSepolia",
+    "deploy:local": "hardhat run scripts/deploy.ts --network hardhat",
+    "node": "hardhat node"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.19"
+  },
+  "dependencies": {
+    "@inco/lightning": "1.0.2",
+    "dotenv": "^16.4.7"
+  }
+}
