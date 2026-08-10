@@ -188,6 +188,15 @@ export interface ServerToClientEvents {
   meetingStarted: (payload: { reason: MeetingReason; endsAt: number }) => void;
   meetingResult: (payload: MeetingResult) => void;
   gameEnded: (payload: EndState) => void;
+  /**
+   * SIMULATED MODE ONLY — the player's own role, sent to that one socket.
+   *
+   * This event does not exist in Inco mode, where the server has no oracle and
+   * roles are read from chain by the owning wallet. It is the honest shape of
+   * the fallback: a server that knows the roles and tells each player theirs.
+   * The HUD labels this mode SIMULATED precisely because of this event.
+   */
+  simulatedRole: (payload: { isParasite: boolean }) => void;
   /** Someone died. Public — everyone sees the body eventually. */
   playerPurged: (payload: { victimSeat: Seat; x: number; y: number }) => void;
   toast: (payload: { kind: 'info' | 'warn' | 'error'; text: string }) => void;

@@ -113,6 +113,7 @@ export class GameServer {
           })),
         });
         this.broadcastState(room);
+        await this.deliverSimulatedRoles(room);
       });
 
       socket.on('input', (payload) => {
@@ -214,6 +215,26 @@ export class GameServer {
 
   private cleanup(room: GameRoom): void {
     if (room.isEmpty()) this.rooms.delete(room.code);
+  }
+
+  /**
+   * SIMULATED MODE ONLY: privately tell each player their own role.
+   *
+   * Sent per-socket, never broadcast, so one player's role does not travel to
+   * anyone else's client. That is the best a server-side oracle can do — it is
+   * still a server that KNOWS the roles, which is exactly why this path is
+   * labelled SIMULATED in the UI and why Inco mode exists.
+   *
+   * In Inco mode this is a no-op: the room has no oracle, and each player reads
+   * their own encrypted bit from chain with their own wallet.
+   */
+  private async deliverSimulatedRoles(room: GameRoom): Promise<void> {
+    if (room.roleMode !== 'simulated') return;
+    for (const player of room.players.values()) {
+      const isParasite = await room.readRoleForSeat(player.seat);
+      if (isParasite === null) continue;
+      this.io.to(player.id).emit('simulatedRole', { isParasite });
+    }
   }
 
   private broadcastState(room: GameRoom): void {

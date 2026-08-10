@@ -2,7 +2,7 @@
   "name": "parasite",
   "private": true,
   "version": "1.0.0",
-  "description": "Parasite — a real-time multiplayer social deduction game with Inco-encrypted hidden roles",
+  "description": "Parasite \u2014 a real-time multiplayer social deduction game with Inco-encrypted hidden roles",
   "type": "module",
   "workspaces": [
     "packages/shared",
@@ -32,5 +32,8 @@
     "concurrently": "^9.1.2",
     "sharp": "^0.35.3",
     "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "viem": "2.39.3"
   }
 }

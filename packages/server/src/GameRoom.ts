@@ -641,8 +641,7 @@ export class GameRoom {
   }
 
   /** Simulated mode only: resolve the reveal from the room's own oracle. */
-  async resolveEjectionLocally(): Promise<Emit[]> {
-    if (this.roleMode !== 'simulated' || !this.localOracle || !this.chainGameId) return [];
+  async resolveEjectionLocally(): Promise<Emit[]> {    if (this.roleMode !== 'simulated' || !this.localOracle || !this.chainGameId) return [];
     if (this.pendingEjection === null) return [];
     const was = await this.localOracle.revealIsHost({
       gameId: this.chainGameId,
@@ -653,6 +652,21 @@ export class GameRoom {
 
   get awaitingEjectionReveal(): Seat | null {
     return this.pendingEjection;
+  }
+
+  /**
+   * SIMULATED MODE ONLY: read a seat's role from the room's local oracle.
+   *
+   * Returns null in Inco mode — the room has no oracle there and genuinely
+   * cannot answer this question, which is the property the design depends on.
+   */
+  async readRoleForSeat(seat: Seat): Promise<boolean | null> {
+    if (this.roleMode !== 'simulated' || !this.localOracle || !this.chainGameId) return null;
+    const { isParasite } = await this.localOracle.readMyRole({
+      gameId: this.chainGameId,
+      mySeat: seat,
+    });
+    return isParasite;
   }
 
   // ── Win conditions ─────────────────────────────────────────────────────────

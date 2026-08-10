@@ -202,3 +202,33 @@ export function distance(
 ): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
+
+// ── Client render metadata ───────────────────────────────────────────────────
+// Derived from AREAS rather than re-listed, so the collision geometry the
+// server enforces and the slabs the client draws can never drift apart.
+
+export const MAP_WIDTH = WORLD_WIDTH;
+export const MAP_HEIGHT = WORLD_HEIGHT;
+
+export interface RoomVisual {
+  kind: 'room' | 'path';
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export const ROOMS: RoomVisual[] = AREAS.map((a) => ({
+  kind: a.id === 'path' ? 'path' : 'room',
+  name: a.id === 'path' ? '' : a.name,
+  x: a.x,
+  y: a.y,
+  w: a.w,
+  h: a.h,
+}));
+
+/** Display names for the five tasks, keyed by id. */
+export const TASK_LABELS: Record<TaskId, string> = Object.fromEntries(
+  TASK_DEFS.map((t) => [t.id, t.name])
+) as Record<TaskId, string>;
