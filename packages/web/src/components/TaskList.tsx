@@ -21,27 +21,42 @@ export default function TaskList(props: {
   const { myTasks, done, activeTask, isParasite } = props;
 
   return (
-    <div className="panel sidebar sidebar-left">
-      <h2 className="panel-title">Tasks</h2>
+    <section className="panel sidebar sidebar-left" aria-labelledby="tasks-heading">
+      <h2 className="panel-title" id="tasks-heading">
+        Tasks
+      </h2>
       <div className="scroll">
-        {myTasks.map((id) => {
-          const def = TASK_DEFS.find((t) => t.id === id)!;
-          const isDone = done.includes(id);
-          const isActive = activeTask === id && !isDone;
-          return (
-            <div
-              key={id}
-              className={`task${isActive ? ' active' : ''}${isDone ? ' done' : ''}`}
-            >
-              <span className="task-check">{isDone ? '✔' : '○'}</span>
-              <span>
-                <span className="task-name">{def.name}</span>
-                <br />
-                <span className="task-where">{AREA_NAME.get(def.area) ?? def.area}</span>
-              </span>
-            </div>
-          );
-        })}
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {myTasks.map((id) => {
+            const def = TASK_DEFS.find((t) => t.id === id)!;
+            const isDone = done.includes(id);
+            const isActive = activeTask === id && !isDone;
+            const where = AREA_NAME.get(def.area) ?? def.area;
+            return (
+              <li
+                key={id}
+                className={`task${isActive ? ' active' : ''}${isDone ? ' done' : ''}`}
+              >
+                {/*
+                  The glyph is decorative — the same state is in the text below,
+                  so a screen reader is not left reading "check mark" and
+                  guessing what it applies to.
+                */}
+                <span className="task-check" aria-hidden="true">
+                  {isDone ? '✔' : '○'}
+                </span>
+                <span>
+                  <span className="task-name">{def.name}</span>
+                  <br />
+                  <span className="task-where">{where}</span>
+                  <span className="sr-only">
+                    {isDone ? ' — complete' : isActive ? ' — in reach now' : ' — not started'}
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
 
         {isParasite && (
           <div className="mono-note">
@@ -51,6 +66,6 @@ export default function TaskList(props: {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

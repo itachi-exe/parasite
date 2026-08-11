@@ -85,6 +85,10 @@ button:disabled {
 
 /* ── Shell ─────────────────────────────────────────────────────────────────── */
 
+/* 100dvh, not 100vh: on mobile browsers 100vh is the *largest* viewport and sits
+   under the collapsing URL bar, which clipped the action bar. dvh tracks the
+   visible height. env(safe-area-inset-*) keeps the shell clear of a notch and
+   the home indicator, which viewportFit: cover in layout.tsx lets it reach. */
 .shell {
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -93,10 +97,11 @@ button:disabled {
     'top top top'
     'left stage right'
     'bottom bottom bottom';
-  height: 100vh;
-  width: 100vw;
+  height: 100dvh;
+  width: 100%;
   gap: 8px;
-  padding: 8px;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
 }
 
 .panel {
@@ -542,7 +547,8 @@ button:disabled {
   margin-bottom: 13px;
 }
 
-.field label {
+.field label,
+.field .field-label {
   font-size: 11px;
   letter-spacing: 0.14em;
   color: var(--text-dim);
@@ -646,7 +652,9 @@ button:disabled {
   font-size: 12.5px;
 }
 
-.vote-card:hover:not(:disabled) {
+/* Scoped to button: the lobby roster reuses this class as a plain list item, and
+   a non-interactive row must not light up under the cursor. */
+button.vote-card:hover:not(:disabled) {
   border-color: var(--glow);
   background: rgba(58, 255, 192, 0.1);
 }
@@ -933,7 +941,7 @@ button:disabled {
       'left'
       'right';
     height: auto;
-    min-height: 100vh;
+    min-height: 100dvh;
   }
 
   .sidebar {

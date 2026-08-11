@@ -10,6 +10,8 @@ import {
   JUMP_RANGE,
   PURGE_RANGE,
   REPORT_BODY_RADIUS,
+  AREAS,
+  areaAt,
   distance,
   type SkinId,
   type TaskId,
@@ -122,6 +124,18 @@ export default function GameClient() {
     return null;
   }, [myPos, me?.alive, state]);
 
+  // Human-readable name of the area under the local player, for the canvas's
+  // screen-reader alternative. Derived from the id so the memo only produces a
+  // new string when the player actually crosses into a different area.
+  const myAreaId = myPos ? areaAt(myPos.x, myPos.y) : null;
+  const myArea = useMemo(
+    () =>
+      myAreaId && myAreaId !== 'path'
+        ? (AREAS.find((a) => a.id === myAreaId)?.name ?? null)
+        : null,
+    [myAreaId]
+  );
+
   // ── Ejection reveal: a client performs the on-chain read, not the server ───
   useEffect(() => {
     const pending = state?.meeting;
@@ -208,12 +222,20 @@ export default function GameClient() {
 
         <div className="progress-wrap">
           <div className="progress-label">
-            <span>OUTPOST TASKS</span>
+            <span id="task-progress-label">OUTPOST TASKS</span>
             <span>
               {taskDone}/{state?.taskProgress.total ?? taskTotal}
             </span>
           </div>
-          <div className="progress-track">
+          <div
+            className="progress-track"
+            role="progressbar"
+            aria-labelledby="task-progress-label"
+            aria-valuemin={0}
+            aria-valuemax={state?.taskProgress.total ?? taskTotal}
+            aria-valuenow={taskDone}
+            aria-valuetext={`${taskDone} of ${state?.taskProgress.total ?? taskTotal} outpost tasks complete`}
+          >
             <div className="progress-fill" style={{ width: `${pct}%` }} />
           </div>
         </div>
@@ -225,6 +247,7 @@ export default function GameClient() {
           disabled={
             phase !== 'playing' || !me?.alive || (me?.emergencyMeetingsLeft ?? 0) <= 0
           }
+          aria-label={`Call an emergency meeting. ${me?.emergencyMeetingsLeft ?? 0} remaining.`}
           onClick={() => sock.callMeeting()}
         >
           Emergency ({me?.emergencyMeetingsLeft ?? 0})
@@ -247,6 +270,19 @@ export default function GameClient() {
           onInput={sock.sendInput}
           inputEnabled={phase === 'playing' && !!me?.alive && !openTask}
         />
+        {/*
+          The canvas is an opaque <canvas> to assistive tech — a player using one
+          has no way to know where they are standing. This is its text
+          alternative: the current area plus whatever is in reach. It updates only
+          when the *area* changes, not per frame, so it does not chatter.
+        */}
+        <p className="sr-only" role="status">
+          {myArea ? `In ${myArea}.` : 'Between areas.'}
+          {nearestTask
+            ? ` ${TASK_DEFS.find((t) => t.id === nearestTask)!.name} is in reach.`
+            : ''}
+          {nearestBody !== null ? ' There is a body here.' : ''}
+        </p>
         {showMap && state && (
           <MiniMap players={state.players} mySeat={mySeat} bodies={state.bodies} />
         )}
@@ -257,13 +293,22 @@ export default function GameClient() {
       )}
 
       <footer className="panel actionbar">
-        <button className="btn" onClick={() => setShowMap((v) => !v)}>
+        <button
+          className="btn"
+          aria-pressed={showMap}
+          onClick={() => setShowMap((v) => !v)}
+        >
           Map
         </button>
 
         <button
           className="btn"
           disabled={!nearestTask || phase !== 'playing'}
+          aria-label={
+            nearestTask
+              ? `Use ${TASK_DEFS.find((t) => t.id === nearestTask)!.name}`
+              : 'Use — walk to a task station first'
+          }
           onClick={() => nearestTask && setOpenTask(nearestTask)}
         >
           Use{nearestTask ? ` · ${TASK_DEFS.find((t) => t.id === nearestTask)!.name}` : ''}
@@ -272,6 +317,9 @@ export default function GameClient() {
         <button
           className="btn btn-danger"
           disabled={nearestBody === null || phase !== 'playing'}
+          aria-label={
+            nearestBody === null ? 'Report — no body nearby' : 'Report the body'
+          }
           onClick={() => nearestBody !== null && sock.reportBody(nearestBody)}
         >
           Report
@@ -293,6 +341,7 @@ export default function GameClient() {
             !nearestPlayer ||
             nearestPlayer.d > JUMP_RANGE
           }
+          aria-busy={jumping}
           onClick={doJump}
         >
           {jumping ? 'Jumping…' : 'Jump'}
@@ -306,6 +355,11 @@ export default function GameClient() {
               !me?.alive ||
               !nearestPlayer ||
               nearestPlayer.d > PURGE_RANGE
+            }
+            aria-label={
+              nearestPlayer && nearestPlayer.d <= PURGE_RANGE
+                ? `Purge ${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name ?? 'the nearest scientist'}`
+                : 'Purge — nobody in range'
             }
             onClick={() => nearestPlayer && sock.purge(nearestPlayer.seat)}
           >
@@ -357,7 +411,13 @@ export default function GameClient() {
 
       {sock.end && <EndOverlay end={sock.end} players={state?.players ?? []} />}
 
-      <div className="toasts">
+      {/*
+        Toasts carry the only feedback for a refused jump, a kick, or a purge —
+        losing them to a screen reader loses the reason the game just said no.
+        aria-live=assertive because they are transient (4.2s) and a polite queue
+        would often be read after the toast had already gone.
+      */}
+      <div className="toasts" role="log" aria-live="assertive" aria-atomic="false">
         {sock.toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
             {t.text}

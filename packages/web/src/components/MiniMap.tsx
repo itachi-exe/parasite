@@ -68,7 +68,12 @@ export default function MiniMap(props: {
 
   return (
     <div className="minimap">
-      <canvas ref={ref} width={W} height={H} />
+      {/*
+        The positional information here is already spoken by the stage's
+        sr-only status line, so the canvas itself is hidden rather than
+        described twice.
+      */}
+      <canvas ref={ref} width={W} height={H} role="presentation" aria-hidden="true" />
     </div>
   );
 }
