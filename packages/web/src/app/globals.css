@@ -673,10 +673,6 @@ button.vote-card:hover:not(:disabled) {
   font-weight: 700;
 }
 
-.vote-card.voted .vote-count {
-  margin-left: 8px;
-}
-
 .vote-card img {
   width: 38px;
   height: 38px;

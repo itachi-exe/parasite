@@ -68,28 +68,39 @@ export default function MeetingOverlay(props: {
         <p>{reason}</p>
 
         {/*
-          The countdown ticks four times a second, so it is aria-hidden — a live
-          region here would talk over the entire meeting. The stage label beside
-          it carries the announcement instead, and only changes twice.
+          The countdown ticks four times a second. role=timer with aria-live=off
+          keeps it readable when a screen-reader user navigates to it, without
+          announcing every tick — putting the seconds inside the status region
+          below would talk over the entire meeting.
         */}
         {meeting.stage === 'discussion' && (
           <>
-            <div className={`timer${urgent ? ' urgent' : ''}`} aria-hidden="true">
+            <div
+              className={`timer${urgent ? ' urgent' : ''}`}
+              role="timer"
+              aria-live="off"
+              aria-label={`${secondsLeft} seconds of discussion left`}
+            >
               {secondsLeft}s
             </div>
             <p style={{ textAlign: 'center' }} role="status">
-              Discussion. Voting opens in {secondsLeft} seconds.
+              Discussion. Voting opens when the timer ends.
             </p>
           </>
         )}
 
         {meeting.stage === 'voting' && (
           <>
-            <div className={`timer${urgent ? ' urgent' : ''}`} aria-hidden="true">
+            <div
+              className={`timer${urgent ? ' urgent' : ''}`}
+              role="timer"
+              aria-live="off"
+              aria-label={`${secondsLeft} seconds left to vote`}
+            >
               {secondsLeft}s
             </div>
             <p className="sr-only" role="status">
-              Voting is open. {secondsLeft} seconds remaining.
+              Voting is open.
             </p>
             <div className="vote-grid" role="group" aria-label="Cast your vote">
               {alive.map((p) => (

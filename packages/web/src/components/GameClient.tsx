@@ -414,10 +414,11 @@ export default function GameClient() {
       {/*
         Toasts carry the only feedback for a refused jump, a kick, or a purge —
         losing them to a screen reader loses the reason the game just said no.
-        aria-live=assertive because they are transient (4.2s) and a polite queue
-        would often be read after the toast had already gone.
+        Polite, not assertive: the stream mixes routine notices ("Task faked")
+        with real errors, and interrupting on every one of them is worse than a
+        short wait.
       */}
-      <div className="toasts" role="log" aria-live="assertive" aria-atomic="false">
+      <div className="toasts" role="log" aria-live="polite" aria-atomic="false">
         {sock.toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
             {t.text}

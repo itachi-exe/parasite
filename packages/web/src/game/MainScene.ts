@@ -92,6 +92,22 @@ const TURN_DEADZONE = 0.35;
 const VERTICAL_BIAS = 1.6;
 
 /**
+ * Whether the player has asked the OS for less motion.
+ *
+ * Read at scene construction rather than cached at module scope so a scene
+ * rebuilt after the user flips the setting picks up the new value. Guarded for
+ * `matchMedia` because the scene module is imported dynamically and must not
+ * assume a browser that has it.
+ */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/**
  * The Phaser layer.
  *
  * Deliberately a *dumb renderer*: it owns no game rules. It draws whatever
@@ -220,15 +236,23 @@ export class MainScene extends Phaser.Scene {
       c.add([glow, pad, icon, label]);
       this.stationMarks.set(id, c);
 
-      this.tweens.add({
-        targets: glow,
-        scale: { from: 0.85, to: 1.25 },
-        alpha: { from: 0.1, to: 0.28 },
-        duration: 1500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.InOut',
-      });
+      // The pulse marks where a task is, so it is wayfinding rather than
+      // decoration — but it also runs forever on five markers at once, which is
+      // exactly what prefers-reduced-motion is for. Hold the glow at its mid
+      // value instead of animating; the marker still reads as a station.
+      if (prefersReducedMotion()) {
+        glow.setScale(1.05).setAlpha(0.19);
+      } else {
+        this.tweens.add({
+          targets: glow,
+          scale: { from: 0.85, to: 1.25 },
+          alpha: { from: 0.1, to: 0.28 },
+          duration: 1500,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.InOut',
+        });
+      }
     }
   }
 
