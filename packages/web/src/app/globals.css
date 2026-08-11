@@ -16,6 +16,10 @@
   --danger-dim: #c9506a;
   --warn: #ffc861;
   --parasite: #7cff4f;
+  /* Crew blue. --crew is the badge/banner tint; --crew-bright is the display
+     weight that has to hold up as a heading. */
+  --crew: #2f9fd6;
+  --crew-bright: #79c9ee;
   /* Recessed fill (inputs, cards, wells). Darker than the panel it sits on so
      the surface reads as inset even before its border is drawn. */
   --inset: #03170f;
@@ -205,7 +209,7 @@ button:disabled {
 }
 
 .role-badge.human {
-  border-color: #2f9fd6;
+  border-color: var(--crew);
   background: rgba(47, 159, 214, 0.09);
 }
 
@@ -222,8 +226,8 @@ button:disabled {
 }
 
 .role-badge.human .role-dot {
-  background: #2f9fd6;
-  box-shadow: 0 0 10px #2f9fd6;
+  background: var(--crew);
+  box-shadow: 0 0 10px var(--crew);
 }
 
 .role-text {
@@ -851,7 +855,7 @@ button.vote-card:hover:not(:disabled) {
 
 .banner.crew {
   background: rgba(47, 159, 214, 0.15);
-  border: 1px solid #2f9fd6;
+  border: 1px solid var(--crew);
   color: #bfe9ff;
 }
 
@@ -859,6 +863,18 @@ button.vote-card:hover:not(:disabled) {
   background: rgba(124, 255, 79, 0.14);
   border: 1px solid var(--parasite);
   color: #ddffcc;
+}
+
+/* Win/lose heading. The crew blue is lightened from the #2f9fd6 used for the
+   role badge: as display type on the modal it read at 5.1:1 against the
+   Parasite green's 11.7:1, so the two endings looked lopsided rather than
+   like a matched pair. */
+.end-title.crew {
+  color: var(--crew-bright);
+}
+
+.end-title.parasite {
+  color: var(--parasite);
 }
 
 .muted {

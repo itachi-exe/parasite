@@ -45,7 +45,7 @@ export default function EndOverlay(props: { end: EndState; players: PublicPlayer
         tabIndex={-1}
         style={{ textAlign: 'center' }}
       >
-        <h2 id="end-heading" style={{ color: crewWon ? '#79c9ee' : '#7cff4f' }}>
+        <h2 id="end-heading" className={`end-title ${crewWon ? 'crew' : 'parasite'}`}>
           {crewWon ? 'THE OUTPOST SURVIVED' : 'THE PARASITE WON'}
         </h2>
         <p id="end-reason">{REASON_TEXT[end.reason]}</p>
