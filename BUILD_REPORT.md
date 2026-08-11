@@ -188,3 +188,89 @@ on-paper proxies for what that run would prove.
 3. Reconnection/resume for players who drop mid-meeting.
 4. Vercel/Node deploy notes for the client and server so a remote playtest
    (multiple machines) is possible before the deadline.
+
+---
+
+# ADDENDUM — visual rebuild pass
+
+Everything above describes the game as first built and still stands. This
+section covers a later, **visual-only** pass over the two things that looked
+worst: the map and the in-game characters. No game logic, wire protocol,
+server state model, or contract code was touched, and the 114 tests pass
+unchanged — that invariance is the evidence the pass stayed cosmetic.
+
+## What was wrong
+
+- **The map** was flat coloured rounded rectangles with translucent circles
+  for foliage. A blockout, not a place.
+- **The characters** were one static front-facing PNG per skin, moved with a
+  left/right flip and a vertical sine bob — a cardboard cutout being dragged
+  around.
+
+## What replaced it
+
+Under a hard constraint: **no image generation, no asset downloads.** Every
+pixel is drawn from primitives at boot.
+
+- `packages/web/src/game/art/pen.ts` — a backend-agnostic `Pen` interface all
+  art draws into, plus seeded RNG and shape helpers.
+- `chibi.ts` — the characters: three drawn facings (`down`, `up`, `side`),
+  three walk poses each, human / infected / Parasite forms, and corpses.
+- `palette.ts` — character skins, reveal palettes, environment tones, and the
+  per-room `RoomTheme`s.
+- `mapArt.ts` — themed floors (lab tile, greenhouse moss, meeting deck
+  planking), walls with real thickness and derived doorways, thematic props,
+  layered three-species foliage, and the bioluminescent lamps.
+- `phaserPen.ts` — bakes all of the above into Phaser textures and registers
+  the walk animations.
+- `MainScene.ts` — `preload()` is gone; there is nothing left to load. The map
+  is one baked texture and one draw call. Characters animate off the existing
+  `p.moving` flag, with facing inferred client-side from position deltas.
+
+## How it was verified without a browser
+
+There is no headless browser here, so `scripts/preview-art.ts` hosts the same
+`Pen` as an SVG emitter and `sharp` rasterises it. Dev-only; imports nothing
+that ships.
+
+```bash
+npx tsx scripts/preview-art.ts          # /tmp/chars.png  — every facing, pose, form
+npx tsx scripts/preview-art.ts map      # /tmp/map.png    — full 1600x1200 outpost
+npx tsx scripts/preview-art.ts rooms    # /tmp/rooms.png  — per-room floors and props
+npx tsx scripts/preview-art.ts scene    # /tmp/scene.png  — characters on the real map, 1:1
+```
+
+The `scene` view is the one that matters: a character sheet and a map sheet can
+both look fine in isolation and still tell you nothing about whether a
+scientist reads against a tiled lab floor at real scale.
+
+**Defects this caught that no typecheck could:** a wall drawn across a doorway;
+a cable that tapered to a point in open floor and read as a stray pen mark;
+stools that read as rocks (three rewrites); those stools then sitting exactly on
+the meeting deck's inlaid ring, reading as beads on a track.
+
+## Verified for this pass
+
+```
+npm run typecheck   # clean across shared, server, web
+npm test            # 114 passing (26 shared + 50 server + 38 contracts), unchanged
+npm run build       # shared + server + web, clean
+```
+
+Note: `npm run build` initially failed with `EACCES` on
+`packages/web/.next/trace` — a stale root-owned Next cache from an earlier run,
+not a code fault. Moved aside; the rebuild is clean.
+
+## Caveats specific to this pass
+
+- **Still never rendered by Phaser.** The SVG preview and `PhaserPen` implement
+  the same interface, and the semantics were matched deliberately (including
+  per-corner radii), but they are two implementations. Animation timing,
+  texture bake cost at boot, and depth sorting under real motion are unproven
+  until someone loads the page.
+- **Art was judged by my own eye**, from rendered crops. No human has looked at
+  it yet.
+- **The lobby / meeting / end-screen portraits still use the sliced PNGs.** That
+  was deliberate (see DECISIONS.md); the consequence is that the game now has
+  two visual registers — photo-real portraits in menus, procedural chibis in
+  play. Unifying them would mean drawing portrait-scale art for the pickers.

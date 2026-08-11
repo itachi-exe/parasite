@@ -265,3 +265,105 @@ build. Appended to as the build progressed.
   documentation: movement must be read off the `positions` channel because full
   snapshots are only sent on structural change; and a fixed heading gets stuck
   sliding along walls, so `walkTo` re-aims every frame.
+
+---
+
+# Visual rebuild pass
+
+A later pass, after the game was finished and green. The map was flat coloured
+rectangles and the characters were one static photo-real PNG per skin dragged
+around with a left/right flip. Both were rebuilt from drawing primitives under
+a hard constraint: **no image generation and no asset downloads of any kind.**
+Everything below follows from that constraint plus the rule that game logic,
+the wire protocol and the contracts were not to be touched.
+
+## Drawing against a `Pen` interface instead of against Phaser
+- **Chose:** All art draws into a small backend-agnostic `Pen` interface
+  (`packages/web/src/game/art/pen.ts`) — `fill`, `roundRect`, `poly`,
+  `strokePoly`, and so on. `PhaserPen` implements it at runtime; a dev-only
+  `SvgPen` in `scripts/preview-art.ts` implements it as an SVG emitter that
+  `sharp` rasterises to PNG.
+- **Why:** This is the decision the whole pass rests on. There is no headless
+  browser in this environment, so without it the only available feedback was
+  "the typecheck passes" — which tells you nothing about whether a character's
+  head is the right size or whether a wall is sitting across a doorway. Being
+  able to *look at the output* turned art from guesswork into iteration.
+- **It earned its keep repeatedly.** Rendering, not typechecking, is what
+  caught: a wall segment drawn across a doorway; a "cable" that tapered to a
+  point in open floor and read as a stray pen stroke; lab stools that read as
+  rocks or holes rather than seats (three rewrites, each driven by looking at a
+  magnified crop); and those same stools placed exactly on the radius of the
+  meeting deck's inlaid ring, where they read as beads on a track.
+- **Alternatives considered:** drawing straight into Phaser and shipping blind
+  (rejected — unverifiable); installing a headless browser (a large dependency
+  for a preview, and the `Pen` seam is useful on its own).
+
+## Wall runs are derived from the collision geometry, not authored
+- **Chose:** `wallsFor(rect, others)` computes each slab's wall segments by
+  subtracting from every edge the intervals where any *other* slab covers it.
+- **Why:** The obvious approach — hand-authoring wall rectangles and cutting
+  gaps where the doorways are — encodes the same geometry twice. Since
+  corridors overlap into rooms, the union of room and path rects is exactly the
+  region `isWalkable` accepts, so deriving from that union means a wall can
+  never appear across a passage the server will happily let you walk through.
+  Edit the map later and the walls follow; there is no second source of truth
+  to forget to update.
+
+## Facing is inferred on the client, not added to the wire protocol
+- **Chose:** `resolveFacing()` in `MainScene` picks one of three drawn views
+  from the *interpolated* per-frame position delta.
+- **Why:** The brief called for true directional rendering, but `PublicPlayer`
+  carries only `dir: -1 | 1`. Facing is a view concern, and adding a field for
+  it would have changed the protocol for something the client can work out from
+  data it already has. Two constants stop it from looking cheap: a deadzone,
+  because positions arrive at 20Hz and interpolation noise on a standing player
+  is not exactly zero and would twitch the sprite between views; and a vertical
+  bias, so a diagonal walk resolves to the side view rather than flickering
+  between two facings on consecutive frames.
+- **The `side` view is mirrored for left/right, and that flip is honest** — a
+  body seen from the side really is near-symmetric. Baking a fourth facing
+  would double the texture cost to say the same thing. The flip that was wrong
+  before was using it as the *only* facing.
+
+## Corpses always render human
+- **Chose:** `drawCorpse` has no infected or Parasite form, and `renderBodies`
+  cannot select one.
+- **Why:** A visual decision that is really a security one. Bodies are visible
+  to everyone who walks past them, so a corpse drawn with infected skin or
+  vines would publish the victim's role to the entire lobby — through the art,
+  bypassing every protection on the wire and in the contract. Reveal art
+  (`infected`, `parasite`) is only ever applied to the local player's own
+  sprite, guarded at the one place the variant is chosen. Same rule as the
+  crew roster, which has no code path that could render another player's role.
+
+## Props are decoration, and stay out of the way
+- **Chose:** Benches, monitors, tanks, planters, crates and stools are baked
+  into the map texture. None of them are collidable and none are interactive.
+  Rooms are furnished at their edges.
+- **Why:** The brief asked for thematic props and explicitly not for new
+  interaction logic. Furnishing the edges keeps a prop from ever landing on a
+  task station's 56px interact radius and making it unreachable. The meeting
+  platform gets no central table — the obvious Among-Us-cafeteria move —
+  because `upload-research-data` sits at its exact centre; the preview overlays
+  the station radii specifically so this stays checkable by eye.
+
+## One cosmetic field on the shared type
+- **Chose:** `RoomVisual` gained `area: AreaId`. Nothing else in `shared` or
+  `server` changed.
+- **Why:** The client keys its floor treatment off which area a slab belongs
+  to, and matching on `name` would have made the art break on a copy edit. The
+  brief allowed a shared *purely cosmetic* constant for exactly this. Rules
+  code still resolves areas through `AREAS` as it always did, and the 114
+  existing tests pass unchanged — which is the check that the field stayed
+  cosmetic.
+
+## The lobby portraits were left alone
+- **Chose:** `Lobby.tsx`, `MeetingOverlay.tsx`, `EndOverlay.tsx` and
+  `CrewList.tsx` still use the sliced PNG portraits.
+- **Why:** A still portrait in a character picker is a legitimate use of that
+  art — the brief said so, and it is right. Mid-pass I had rewritten
+  `CrewList.tsx` to drop them, then reverted it: the same PNGs are used by
+  three other components, so the change would have left the HUD roster showing
+  CSS silhouettes while the meeting overlay showed photo portraits of the same
+  players. Consistency across the surface was worth more than consistency with
+  the in-game sprites.
