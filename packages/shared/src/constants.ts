@@ -212,6 +212,12 @@ export const MAP_HEIGHT = WORLD_HEIGHT;
 
 export interface RoomVisual {
   kind: 'room' | 'path';
+  /**
+   * Which area this slab belongs to. Purely cosmetic — the client keys its
+   * floor treatment off it. Nothing in the rules reads it; walkability and
+   * area lookups go through AREAS as they always did.
+   */
+  area: AreaId;
   name: string;
   x: number;
   y: number;
@@ -221,6 +227,7 @@ export interface RoomVisual {
 
 export const ROOMS: RoomVisual[] = AREAS.map((a) => ({
   kind: a.id === 'path' ? 'path' : 'room',
+  area: a.id,
   name: a.id === 'path' ? '' : a.name,
   x: a.x,
   y: a.y,

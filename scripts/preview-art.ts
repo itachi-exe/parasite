@@ -30,6 +30,7 @@ import {
   drawCorpse,
   CELL_W,
   CELL_H,
+  FEET,
   type Facing,
   type Step,
 } from '../packages/web/src/game/art/chibi.ts';
@@ -225,6 +226,34 @@ async function characters() {
 }
 
 async function map() {
+  const { drawOutpost } = await import('../packages/web/src/game/art/mapArt.ts');
+  const { ROOMS, MAP_WIDTH, MAP_HEIGHT } = await import('../packages/shared/src/constants.ts');
+
+  const pen = new SvgPen(1);
+  drawOutpost(pen, {
+    slabs: ROOMS,
+    themes: THEMES,
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT,
+    seed: 1337,
+  });
+
+  // Task stations, drawn as plain markers just to prove nothing was furnished
+  // on top of one. MainScene draws the real ones.
+  const marks: string[] = [];
+  const { TASK_STATIONS } = await import('../packages/shared/src/constants.ts');
+  for (const [id, st] of Object.entries(TASK_STATIONS)) {
+    marks.push(
+      `<circle cx="${st.x}" cy="${st.y}" r="56" fill="none" stroke="#ff3b6b" stroke-opacity="0.55" stroke-width="2"/>` +
+        `<text x="${st.x}" y="${st.y - 62}" fill="#ff8fa8" font-family="monospace" font-size="13" text-anchor="middle">${id}</text>`
+    );
+  }
+
+  await render('map', MAP_WIDTH, MAP_HEIGHT, '#04130f', pen.out.join('') + marks.join(''));
+}
+
+/** Per-room detail sheet, for looking at floors and props up close. */
+async function rooms() {
   const { drawRoomFloor, drawProps, drawFoliageClump } = await import(
     '../packages/web/src/game/art/mapArt.ts'
   );
@@ -263,9 +292,127 @@ async function map() {
     return `<g transform="translate(${x},${y})">${c.body}<text x="6" y="${ch + 13}" fill="#8ffce0" font-family="monospace" font-size="12">${c.label}</text></g>`;
   });
 
-  await render('map', W, H, '#04130f', body.join(''));
+  await render('rooms', W, H, '#04130f', body.join(''));
+}
+
+/**
+ * A slice of the real game view: characters standing on the real map, at the
+ * real size, with the real shadow and name tag.
+ *
+ * The character sheet and the map sheet each look fine in isolation and still
+ * tell you nothing about whether a scientist reads against a tiled lab floor at
+ * 1:1. This is the only view that answers that.
+ */
+async function scene() {
+  const { drawOutpost } = await import('../packages/web/src/game/art/mapArt.ts');
+  const { ROOMS, MAP_WIDTH, MAP_HEIGHT, TASK_STATIONS, PLAYER_RADIUS } = await import(
+    '../packages/shared/src/constants.ts'
+  );
+
+  const pen = new SvgPen(1);
+  drawOutpost(pen, {
+    slabs: ROOMS,
+    themes: THEMES,
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT,
+    seed: 1337,
+  });
+
+  // A cast of characters walking the outpost, one per facing so the whole set
+  // is on screen at once. Positions are hand-picked to sit in different rooms.
+  const cast: { x: number; y: number; f: Facing; st: Step; flip: boolean; skin: number }[] = [
+    { x: 250, y: 250, f: 'down', st: -1, flip: false, skin: 0 },
+    { x: 320, y: 300, f: 'side', st: 1, flip: false, skin: 1 },
+    { x: 390, y: 250, f: 'up', st: 1, flip: false, skin: 2 },
+    { x: 1310, y: 260, f: 'down', st: 0, flip: false, skin: 3 },
+    { x: 1240, y: 310, f: 'side', st: -1, flip: true, skin: 0 },
+    { x: 760, y: 560, f: 'down', st: 1, flip: false, skin: 1 },
+    { x: 840, y: 600, f: 'side', st: 0, flip: true, skin: 2 },
+    { x: 800, y: 680, f: 'up', st: -1, flip: false, skin: 3 },
+    { x: 300, y: 930, f: 'down', st: -1, flip: false, skin: 2 },
+    { x: 380, y: 960, f: 'side', st: 1, flip: false, skin: 0 },
+    { x: 1290, y: 920, f: 'down', st: 1, flip: false, skin: 1 },
+    { x: 1200, y: 980, f: 'up', st: 0, flip: false, skin: 3 },
+    // Boardwalk, to check a character against the path planks and railings.
+    { x: 550, y: 285, f: 'side', st: -1, flip: false, skin: 2 },
+    { x: 295, y: 620, f: 'down', st: 1, flip: false, skin: 0 },
+  ];
+
+  const NAMES = ['ADA', 'RAY', 'MEI', 'JUN', 'KIT', 'LEO'];
+  const parts: string[] = [pen.out.join('')];
+
+  cast.forEach((c, i) => {
+    const p = new SvgPen(1);
+    drawCharacter(p, {
+      pal: SKINS[c.skin]!.pal,
+      accessory: SKINS[c.skin]!.accessory,
+      facing: c.f,
+      step: c.st,
+      form: 'human',
+    });
+    // Same transform the scene applies: origin on the feet, so the character
+    // stands at (x, y) rather than being centred on it.
+    const ox = c.x - CELL_W / 2;
+    const oy = c.y - FEET;
+    const flip = c.flip ? ` transform="translate(${CELL_W},0) scale(-1,1)"` : '';
+    parts.push(
+      `<ellipse cx="${c.x}" cy="${c.y + 1}" rx="${PLAYER_RADIUS}" ry="6" fill="#000" opacity="0.38"/>` +
+        `<g transform="translate(${ox},${oy})"><g${flip}>${p.out.join('')}</g></g>` +
+        `<text x="${c.x}" y="${c.y - 68}" fill="#eafff8" font-family="monospace" font-size="12" text-anchor="middle">${NAMES[i % NAMES.length]}</text>`
+    );
+  });
+
+  // A corpse and the two reveal forms, so they get checked in situ too.
+  const cp = new SvgPen(1);
+  drawCorpse(cp, corpsePalette(SKINS[1]!.pal), SKINS[1]!.accessory);
+  parts.push(
+    `<g transform="translate(${900 - CELL_W / 2},${640 - FEET})">${cp.out.join('')}</g>` +
+      `<text x="900" y="${640 - 70}" fill="#ff9aa8" font-family="monospace" font-size="12" text-anchor="middle">☠</text>`
+  );
+
+  const reveal: { x: number; y: number; form: 'infected' | 'parasite'; skin: number }[] = [
+    { x: 690, y: 600, form: 'infected', skin: 0 },
+    { x: 720, y: 690, form: 'parasite', skin: 0 },
+  ];
+  for (const r of reveal) {
+    const p = new SvgPen(1);
+    drawCharacter(p, {
+      pal: r.form === 'parasite' ? PARASITE_PAL : infectedPalette(SKINS[r.skin]!.pal),
+      accessory: SKINS[r.skin]!.accessory,
+      facing: 'down',
+      step: 1,
+      form: r.form,
+    });
+    parts.push(
+      `<ellipse cx="${r.x}" cy="${r.y + 1}" rx="${PLAYER_RADIUS}" ry="6" fill="#000" opacity="0.38"/>` +
+        `<g transform="translate(${r.x - CELL_W / 2},${r.y - FEET})">${p.out.join('')}</g>`
+    );
+  }
+
+  // Station markers, drawn the way MainScene draws them.
+  for (const [id, st] of Object.entries(TASK_STATIONS)) {
+    parts.push(
+      `<circle cx="${st.x}" cy="${st.y}" r="26" fill="#2ef2b0" opacity="0.16"/>` +
+        `<circle cx="${st.x}" cy="${st.y}" r="15" fill="#0d2f24" stroke="#3affc0" stroke-width="2.5"/>` +
+        `<text x="${st.x}" y="${st.y + 6}" fill="#c8fff0" font-family="monospace" font-size="17" text-anchor="middle">✦</text>` +
+        `<text x="${st.x}" y="${st.y + 42}" fill="#9dffe4" font-family="monospace" font-size="11" text-anchor="middle">${id}</text>`
+    );
+  }
+
+  // Room names, as MainScene overlays them.
+  for (const room of ROOMS) {
+    if (room.kind === 'path') continue;
+    const theme = THEMES[room.area];
+    parts.push(
+      `<text x="${room.x + room.w / 2}" y="${room.y + 27}" fill="${theme?.label ?? '#8ffce0'}" opacity="0.7" font-family="monospace" font-size="13" text-anchor="middle">${room.name.toUpperCase()}</text>`
+    );
+  }
+
+  await render('scene', MAP_WIDTH, MAP_HEIGHT, '#04130f', parts.join(''));
 }
 
 const mode = process.argv[2] ?? 'chars';
 if (mode === 'map') await map();
+else if (mode === 'rooms') await rooms();
+else if (mode === 'scene') await scene();
 else await characters();
