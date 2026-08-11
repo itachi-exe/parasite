@@ -22,7 +22,9 @@ export default function Lobby(props: {
   contractAddress: string | null;
   walletAddress: string | null;
   onConnectWallet: () => void;
-  onJoin: (opts: { code: string; name: string; skin: SkinId }) => void;
+  /* Returns a promise so the button can show a pending state; a plain void
+     return is still accepted. */
+  onJoin: (opts: { code: string; name: string; skin: SkinId }) => void | Promise<void>;
   onStart: () => void;
 }) {
   const {
@@ -41,6 +43,7 @@ export default function Lobby(props: {
   const [name, setName] = useState('');
   const [code, setCode] = useState('VIRELIA');
   const [skin, setSkin] = useState<SkinId>(0);
+  const [joining, setJoining] = useState(false);
 
   // No onClose: the lobby is the entry point, so there is nothing behind it to
   // dismiss to.
@@ -48,6 +51,22 @@ export default function Lobby(props: {
 
   const count = state?.players.length ?? 0;
   const canStart = count >= MIN_PLAYERS && count <= MAX_PLAYERS;
+
+  /**
+   * Guards against the double-submit the bare handler allowed: joining is a
+   * round trip, and the button gave no sign it was in flight.
+   */
+  const submitJoin = async () => {
+    if (!connected || joining) return;
+    setJoining(true);
+    try {
+      await onJoin({ code, name, skin });
+    } finally {
+      // The component unmounts on success, so this only matters on failure —
+      // which is exactly when the button has to become usable again.
+      setJoining(false);
+    }
+  };
 
   return (
     <div className="overlay">
@@ -77,11 +96,17 @@ export default function Lobby(props: {
                 maxLength={16}
                 placeholder="Dr. Okafor"
                 autoComplete="off"
+                aria-describedby="lobby-name-help"
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && connected) onJoin({ code, name, skin });
+                  if (e.key === 'Enter') void submitJoin();
                 }}
               />
+              {/* The server assigns this fallback silently; saying so up front
+                  beats a player wondering who "Scientist 3" is. */}
+              <span className="field-help" id="lobby-name-help">
+                Up to 16 characters. Leave it blank and the outpost will name you.
+              </span>
             </div>
 
             <div className="field">
@@ -93,11 +118,15 @@ export default function Lobby(props: {
                 autoComplete="off"
                 autoCapitalize="characters"
                 spellCheck={false}
+                aria-describedby="lobby-code-help"
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && connected) onJoin({ code, name, skin });
+                  if (e.key === 'Enter') void submitJoin();
                 }}
               />
+              <span className="field-help" id="lobby-code-help">
+                Everyone joining the same game must type the same code.
+              </span>
             </div>
 
             {/*
@@ -130,13 +159,22 @@ export default function Lobby(props: {
             <div className="row">
               <button
                 className="btn btn-lg"
-                disabled={!connected}
-                onClick={() => onJoin({ code, name, skin })}
+                disabled={!connected || joining}
+                aria-busy={joining}
+                onClick={() => void submitJoin()}
               >
-                {connected ? 'Join outpost' : 'Connecting…'}
+                {joining ? 'Joining…' : connected ? 'Join outpost' : 'Connecting…'}
               </button>
               {roleMode === 'inco' && (
-                <button className="btn" onClick={onConnectWallet}>
+                <button
+                  className="btn"
+                  onClick={onConnectWallet}
+                  aria-label={
+                    walletAddress
+                      ? `Wallet connected: ${walletAddress}. Choose a different wallet.`
+                      : 'Connect a wallet to decrypt your role'
+                  }
+                >
                   {walletAddress
                     ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
                     : 'Connect wallet'}

@@ -555,6 +555,16 @@ button:disabled {
   text-transform: uppercase;
 }
 
+/* Helper text sits below its input, not in the placeholder — a placeholder
+   disappears the moment it is needed most. */
+.field-help {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+
 .field input {
   background: var(--inset);
   border: 1px solid var(--edge);
