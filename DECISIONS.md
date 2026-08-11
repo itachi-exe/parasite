@@ -178,3 +178,90 @@ build. Appended to as the build progressed.
   the outside.
 - **Alternatives considered:** Manual crops (brittle, and the spec allows
   either); threshold-based keying (destroys the lab coats).
+
+## Decoy jumps must target the sender's OWN seat
+- **Chose:** Every decoy jump encrypts the sender's *own* seat as the target.
+- **Why:** This was a real bug, caught late, and it would have broken the
+  centerpiece mechanic in play. The contract computes
+  `hostSeat = e.select(callerIsHost, targetSeat, hostSeat)`. The decoy
+  scheduler originally aimed at a random *other* player, reasoning that a
+  decoy is a no-op. That is true for a human — `callerIsHost` is false, so the
+  select keeps the old value regardless of target. But for the **Parasite**
+  `callerIsHost` is TRUE, so the select fires and the decoy is a *real jump*:
+  the Parasite would have silently handed the role to a random player roughly
+  every 40 seconds, with no UI event, for the entire match.
+  Self-targeting collapses to `e.select(true, mySeat, mySeat)` — a genuine
+  no-op for the Parasite, and still a no-op for everyone else.
+- **Cover traffic is unaffected:** the target is encrypted, so an observer
+  cannot distinguish a self-target from any other target; the transaction is
+  byte-identical and burns identical gas (both are asserted in the contract
+  tests).
+- **Locked with:** `a self-targeted decoy is a no-op EVEN FOR THE PARASITE`,
+  which also asserts the contrast — the same Parasite aiming *elsewhere* does
+  move the role, so the test would catch a "fix" that disabled jumps entirely.
+- **Alternatives considered:** having the client skip decoys when it knows it
+  is the Parasite (destroys the entire point — absence of traffic becomes the
+  fingerprint); a contract-level `isDecoy` flag (a plaintext flag that says
+  "ignore me" is exactly the leak decoys exist to prevent).
+
+## Hand-written client ABI, guarded by a drift test
+- **Chose:** The web client declares its own ABI literal
+  (`packages/web/src/lib/contract.ts`) instead of importing the Hardhat
+  artifact, and a contracts-package test diffs the two.
+- **Why:** Importing the artifact would give the Next build a build-order
+  dependency on `hardhat compile`, which makes the frontend unbuildable
+  without the contracts toolchain. But hand-copying a signature has a nasty
+  failure mode: a Solidity change compiles green, all suites stay green, the
+  web typecheck stays green, and the dapp breaks only on a live network with
+  an opaque revert — on the one path that *cannot* be covered end-to-end here,
+  since no deploy key was provided. The drift test buys the decoupling back
+  without the risk, and asserts over mutability and event `indexed` flags too,
+  not just names (a silent `payable` → `nonpayable` would revert every jump).
+- **Alternatives considered:** generating the ABI into the web package at build
+  time (reintroduces the build-order dependency); typechain across workspaces
+  (heavier, same coupling).
+
+## Phaser's ESM build has no default export
+- **Chose:** `import * as Phaser from 'phaser'` in the scene, plus a
+  `mod.default ?? mod` fallback at the dynamic-import site.
+- **Why:** A latent runtime crash the type system actively hid. Phaser's
+  `.d.ts` uses `export = Phaser`, so with `esModuleInterop` a default import
+  *typechecks* — but bundlers resolve the `module` field to `dist/phaser.esm.js`,
+  which has named exports only. `Phaser` was `undefined` at runtime and
+  `new Phaser.Game` threw. Typecheck and build were both clean; only actually
+  loading the page surfaced it. The fallback accepts whichever shape the
+  bundler hands over rather than betting on one.
+- **Alternatives considered:** forcing the CJS build via a bundler alias
+  (fights Next's defaults and pessimises the chunk); `require()` (breaks the
+  server render Phaser is dynamically imported to avoid in the first place).
+
+## Repairing a corrupt `viem` install without deleting node_modules
+- **Chose:** Diagnosed and repaired in place — `npm cache verify`, then
+  `npm pack viem@2.39.3` into a scratch dir inside the workspace and `cp -a`
+  over the existing package.
+- **Why:** The symptom (TS7016, "could not find a declaration file for
+  `viem`") looked like the wagmi/Inco duplicate-version conflict the root
+  `overrides` was added to fix. It was not: the override had worked and there
+  was exactly one physical copy at the right version. The install was simply
+  **corrupt** — 3414 of 8876 files present, and `_types/` held 121 `.d.ts.map`
+  files with zero matching `.d.ts`. A blanket `rm -rf node_modules` reinstall
+  had been explicitly rejected earlier in the build, so the repair was done
+  additively; the scratch dir was removed afterwards.
+- **Worth recording because** the misleading symptom cost real time: a
+  version-conflict error and a truncated-extraction error present identically
+  at the TypeScript layer. Check file counts before trusting the error text.
+
+## An over-the-wire smoke test, separate from the socket unit tests
+- **Chose:** `packages/server/src/e2e.smoke.mjs` — four real socket.io clients
+  against the *built* server (`dist/index.js`) at *production* timings.
+- **Why:** The vitest socket tests start the server in-process with shortened
+  meeting timers, which is right for fast feedback but structurally blind to a
+  whole class of failure: wrong build output, env wiring, and protocol drift
+  between what the server emits and what the web client subscribes to. This
+  one drives the real artefact and asserts the security invariants too
+  (mid-game join rejected, out-of-range task claim rejected, the dead cannot
+  act) rather than only the happy path.
+- **Two bugs it caught were in the test, not the code**, and both were kept as
+  documentation: movement must be read off the `positions` channel because full
+  snapshots are only sent on structural change; and a fixed heading gets stuck
+  sliding along walls, so `walkTo` re-aims every frame.
