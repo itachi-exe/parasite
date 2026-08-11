@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { MIN_PLAYERS, MAX_PLAYERS, type RoomState, type SkinId } from '@parasite/shared';
+import { useDialog } from '@/hooks/useDialog';
 
 const SKIN_SRC = [
   '/sprites/human-0.png',
@@ -9,6 +10,8 @@ const SKIN_SRC = [
   '/sprites/human-2.png',
   '/sprites/human-3.png',
 ];
+
+const SKIN_NAME = ['Amber', 'Indigo', 'Rust', 'Slate'];
 
 export default function Lobby(props: {
   state: RoomState | null;
@@ -39,13 +42,24 @@ export default function Lobby(props: {
   const [code, setCode] = useState('VIRELIA');
   const [skin, setSkin] = useState<SkinId>(0);
 
+  // No onClose: the lobby is the entry point, so there is nothing behind it to
+  // dismiss to.
+  const dialogRef = useDialog();
+
   const count = state?.players.length ?? 0;
   const canStart = count >= MIN_PLAYERS && count <= MAX_PLAYERS;
 
   return (
     <div className="overlay">
-      <div className="modal">
-        <h2>PARASITE</h2>
+      <div
+        className="modal"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lobby-heading"
+        tabIndex={-1}
+      >
+        <h2 id="lobby-heading">PARASITE</h2>
         <p>
           Virelia Research Outpost · one of you is not what they appear to be.
           <br />
@@ -62,6 +76,7 @@ export default function Lobby(props: {
                 value={name}
                 maxLength={16}
                 placeholder="Dr. Okafor"
+                autoComplete="off"
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && connected) onJoin({ code, name, skin });
@@ -75,19 +90,36 @@ export default function Lobby(props: {
                 id="lobby-code"
                 value={code}
                 maxLength={12}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && connected) onJoin({ code, name, skin });
+                }}
               />
             </div>
 
+            {/*
+              A radiogroup rather than four buttons: a button conveys "activate
+              me", not "one of these is chosen". With role=radio + aria-checked a
+              screen reader announces "Amber, 1 of 4, selected", which is the
+              actual state of this control.
+            */}
             <div className="field">
-              <label>Choose your scientist</label>
-              <div className="skins">
+              <span className="field-label" id="skin-label">
+                Choose your scientist
+              </span>
+              <div className="skins" role="radiogroup" aria-labelledby="skin-label">
                 {SKIN_SRC.map((src, i) => (
                   <button
                     key={src}
+                    type="button"
+                    role="radio"
+                    aria-checked={skin === i}
                     className={`skin${skin === i ? ' sel' : ''}`}
                     onClick={() => setSkin(i as SkinId)}
-                    aria-label={`Scientist ${i + 1}`}
+                    aria-label={SKIN_NAME[i] ?? `Scientist ${i + 1}`}
                   >
                     <img src={src} alt="" />
                   </button>
@@ -113,7 +145,7 @@ export default function Lobby(props: {
             </div>
 
             {!connected && (
-              <div className="mono-note">
+              <div className="mono-note" role="status">
                 Cannot reach the game server. Start it with <code>npm run dev:server</code>{' '}
                 (or <code>npm run dev</code> to run both).
               </div>
@@ -121,7 +153,15 @@ export default function Lobby(props: {
           </>
         ) : (
           <>
-            <div className="row" style={{ justifyContent: 'space-between', marginTop: 16 }}>
+            {/*
+              Polite live region: players trickle in while you are watching the
+              lobby, and the count changing is the one thing you are waiting for.
+            */}
+            <div
+              className="row"
+              style={{ justifyContent: 'space-between', marginTop: 16 }}
+              role="status"
+            >
               <strong style={{ letterSpacing: '0.1em' }}>
                 {count} / {MAX_PLAYERS} scientists
               </strong>
@@ -130,14 +170,14 @@ export default function Lobby(props: {
               </span>
             </div>
 
-            <div className="vote-grid" style={{ marginTop: 12 }}>
+            <ul className="vote-grid" style={{ marginTop: 12, listStyle: 'none', padding: 0 }}>
               {state?.players.map((p) => (
-                <div key={p.seat} className="vote-card" style={{ cursor: 'default' }}>
+                <li key={p.seat} className="vote-card">
                   <img src={SKIN_SRC[p.skin % 4]} alt="" />
                   <span>{p.name}</span>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
 
             {isHost ? (
               <button className="btn btn-lg" disabled={!canStart} onClick={onStart}>
