@@ -17,6 +17,23 @@ import {
   type TaskId,
   type Seat,
 } from '@parasite/shared';
+import {
+  PhaserPen,
+  bakePlayableSkins,
+  ensureSkin,
+  ensureInfected,
+  ensureParasite,
+  ensureCorpse,
+  walkAnim,
+  frameKey,
+  ORIGIN_Y,
+  CELL_W,
+  CELL_H,
+  type Variant,
+  type Facing,
+} from './art/phaserPen';
+import { drawOutpost } from './art/mapArt';
+import { THEMES } from './art/palette';
 
 export interface SceneBridge {
   /** Latest authoritative snapshot from the server. */
@@ -39,7 +56,40 @@ export interface SceneBridge {
   }) => void;
 }
 
-const SKIN_KEYS = ['skin0', 'skin1', 'skin2', 'skin3'] as const;
+/**
+ * Everything the renderer keeps per player, on top of what the server sends.
+ *
+ * `facing` and `from*` exist because facing is a *view* concern the wire
+ * protocol has no field for — see `resolveFacing`.
+ */
+interface Vis {
+  c: Phaser.GameObjects.Container;
+  body: Phaser.GameObjects.Sprite;
+  tag: Phaser.GameObjects.Text;
+  /** Which baked variant is currently on the sprite. */
+  variant: Variant;
+  facing: Facing;
+  /** Last drawn position, used to infer which way the character is walking. */
+  fromX: number;
+  fromY: number;
+}
+
+/**
+ * How far a player must move in a frame before the sprite turns.
+ *
+ * Positions arrive at 20Hz and are then interpolated, so the per-frame delta on
+ * a standing player is not exactly zero. Below this it is noise, and honouring
+ * it makes an idle character twitch between facings.
+ */
+const TURN_DEADZONE = 0.35;
+
+/**
+ * How much more vertical than horizontal the motion has to be to switch to a
+ * front/back view. Diagonal movement is drawn as a side view because the side
+ * view is the most legible of the three, and biasing towards it stops a
+ * diagonal walk from flickering between two facings on every frame.
+ */
+const VERTICAL_BIAS = 1.6;
 
 /**
  * The Phaser layer.
@@ -52,7 +102,7 @@ const SKIN_KEYS = ['skin0', 'skin1', 'skin2', 'skin3'] as const;
  */
 export class MainScene extends Phaser.Scene {
   private bridge!: SceneBridge;
-  private sprites = new Map<Seat, Phaser.GameObjects.Container>();
+  private people = new Map<Seat, Vis>();
   private bodySprites = new Map<Seat, Phaser.GameObjects.Container>();
   private stationMarks = new Map<TaskId, Phaser.GameObjects.Container>();
   private keys!: {
@@ -76,18 +126,14 @@ export class MainScene extends Phaser.Scene {
     this.bridge = data.bridge;
   }
 
-  preload() {
-    this.load.image('skin0', '/sprites/human-0.png');
-    this.load.image('skin1', '/sprites/human-1.png');
-    this.load.image('skin2', '/sprites/human-2.png');
-    this.load.image('skin3', '/sprites/human-3.png');
-    this.load.image('infected', '/sprites/infected.png');
-    this.load.image('parasite', '/sprites/parasite.png');
-  }
-
   create() {
     this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT);
     this.cameras.main.setBackgroundColor('#04130f');
+
+    // No preload(): there are no image files. Every sprite in this game is baked
+    // from drawing primitives at boot, which is why the loader is empty and the
+    // scene can start drawing immediately.
+    bakePlayableSkins(this);
 
     this.drawMap();
     this.drawStations();
@@ -110,70 +156,44 @@ export class MainScene extends Phaser.Scene {
     kb.addCapture(['W', 'A', 'S', 'D', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'SPACE']);
   }
 
-  /** Jungle floor, room slabs, and bioluminescent accents. */
+  /**
+   * The outpost, baked once into a single texture.
+   *
+   * `drawOutpost` emits a few thousand primitives — jungle, foliage, floors,
+   * walls, props, lamps. Replaying that every frame would be absurd, so it is
+   * rendered into one texture at boot and the map costs exactly one draw call
+   * from then on. The whole thing is seeded, so every client bakes an identical
+   * image (see mapArt.ts).
+   */
   private drawMap() {
-    const g = this.add.graphics().setDepth(0);
-
-    // Jungle backdrop with a soft vignette of darker foliage patches.
-    g.fillStyle(0x06251b, 1);
-    g.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-
-    // Deterministic foliage speckle — seeded so every client renders the same
-    // map (no Math.random, which would desync the visual between players).
-    let seed = 1337;
-    const rnd = () => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-    for (let i = 0; i < 260; i++) {
-      const x = rnd() * MAP_WIDTH;
-      const y = rnd() * MAP_HEIGHT;
-      const r = 12 + rnd() * 34;
-      g.fillStyle(0x0a3527, 0.55);
-      g.fillCircle(x, y, r);
+    const KEY = 'outpost';
+    if (!this.textures.exists(KEY)) {
+      const g = this.make.graphics({}, false);
+      drawOutpost(new PhaserPen(g, 1), {
+        slabs: ROOMS,
+        themes: THEMES,
+        width: MAP_WIDTH,
+        height: MAP_HEIGHT,
+        seed: 1337,
+      });
+      g.generateTexture(KEY, MAP_WIDTH, MAP_HEIGHT);
+      g.destroy();
     }
-    for (let i = 0; i < 90; i++) {
-      const x = rnd() * MAP_WIDTH;
-      const y = rnd() * MAP_HEIGHT;
-      g.fillStyle(0x2ef2b0, 0.13);
-      g.fillCircle(x, y, 2 + rnd() * 3);
-    }
+    this.add.image(0, 0, KEY).setOrigin(0, 0).setDepth(0);
 
+    // Room names stay live text rather than being baked in, so they keep the
+    // HUD's font and can be tinted per area.
     for (const room of ROOMS) {
-      const isPath = room.kind === 'path';
-      const fill = isPath ? 0x123a2c : 0x16473a;
-      const edge = isPath ? 0x1f7a5c : 0x37d99a;
-
-      g.fillStyle(fill, 1);
-      g.fillRoundedRect(room.x, room.y, room.w, room.h, isPath ? 6 : 14);
-      g.lineStyle(isPath ? 2 : 3, edge, isPath ? 0.5 : 0.85);
-      g.strokeRoundedRect(room.x, room.y, room.w, room.h, isPath ? 6 : 14);
-
-      if (!isPath) {
-        // Bioluminescent corner lamps.
-        const pts = [
-          [room.x + 16, room.y + 16],
-          [room.x + room.w - 16, room.y + 16],
-          [room.x + 16, room.y + room.h - 16],
-          [room.x + room.w - 16, room.y + room.h - 16],
-        ];
-        for (const [px, py] of pts) {
-          g.fillStyle(0x6affd0, 0.22);
-          g.fillCircle(px!, py!, 13);
-          g.fillStyle(0xb6ffe8, 0.9);
-          g.fillCircle(px!, py!, 3.5);
-        }
-
-        this.add
-          .text(room.x + room.w / 2, room.y + 13, room.name.toUpperCase(), {
-            fontFamily: 'monospace',
-            fontSize: '13px',
-            color: '#8ffce0',
-          })
-          .setOrigin(0.5, 0)
-          .setAlpha(0.75)
-          .setDepth(1);
-      }
+      if (room.kind === 'path') continue;
+      this.add
+        .text(room.x + room.w / 2, room.y + 15, room.name.toUpperCase(), {
+          fontFamily: 'monospace',
+          fontSize: '13px',
+          color: THEMES[room.area]?.label ?? '#8ffce0',
+        })
+        .setOrigin(0.5, 0)
+        .setAlpha(0.7)
+        .setDepth(1);
     }
   }
 
@@ -212,34 +232,76 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  /** Build (or fetch) the container for one player. */
-  private spriteFor(p: PublicPlayer): Phaser.GameObjects.Container {
-    let c = this.sprites.get(p.seat);
-    if (c) return c;
+  /**
+   * Per-seat view state.
+   *
+   * Facing and the walk cycle are derived here, on the client, from data the
+   * server already sends. See `resolveFacing`.
+   */
+  private visFor(p: PublicPlayer): Vis {
+    const found = this.people.get(p.seat);
+    if (found) return found;
 
-    c = this.add.container(p.x, p.y).setDepth(10);
+    const c = this.add.container(p.x, p.y).setDepth(10);
 
-    const shadow = this.add.ellipse(0, PLAYER_RADIUS - 2, 34, 12, 0x000000, 0.35);
-    const key = SKIN_KEYS[p.skin % SKIN_KEYS.length]!;
-    const img = this.add.image(0, 0, key);
-    // Sprites are sliced at varying sizes; normalise to a consistent height.
-    img.setDisplaySize((img.width / img.height) * 62, 62);
-    img.setName('body');
+    // The shadow is the collision circle seen in perspective — same radius the
+    // server enforces, so what you can walk into matches what you can see.
+    const shadow = this.add.ellipse(0, 1, PLAYER_RADIUS * 2, 12, 0x000000, 0.38);
 
-    const nameTag = this.add
-      .text(0, -46, p.name, {
+    const variant = ensureSkin(this, p.skin);
+    const body = this.add.sprite(0, 0, frameKey(variant, 'down', 0));
+    // Origin on the feet, not the middle: the character then stands *at* the
+    // position the server reports, and depth sorting by y puts whoever is
+    // further down the screen in front, as it should.
+    body.setOrigin(0.5, ORIGIN_Y);
+    body.setDisplaySize(CELL_W, CELL_H);
+
+    const tag = this.add
+      .text(0, -66, p.name, {
         fontFamily: 'monospace',
         fontSize: '12px',
         color: '#eafff8',
         backgroundColor: '#04130faa',
         padding: { x: 4, y: 1 },
       })
-      .setOrigin(0.5, 1)
-      .setName('tag');
+      .setOrigin(0.5, 1);
 
-    c.add([shadow, img, nameTag]);
-    this.sprites.set(p.seat, c);
-    return c;
+    c.add([shadow, body, tag]);
+    const v: Vis = { c, body, tag, variant, facing: 'down', fromX: p.x, fromY: p.y };
+    this.people.set(p.seat, v);
+    return v;
+  }
+
+  /**
+   * Put one character into the right variant, facing and animation state.
+   *
+   * All three are independent — a Parasite can turn, a corpse-to-be can stop —
+   * so this is a single place that reconciles the sprite with what it should be
+   * showing, rather than three scattered conditionals.
+   */
+  private pose(v: Vis, variant: Variant, facing: Facing, walking: boolean, dir: -1 | 1): void {
+    // `side` is drawn facing right and mirrored for left. This is the one place
+    // a flip is honest: a body seen from the side really is near-symmetric, and
+    // baking a second set of frames for it would double the texture cost to say
+    // the same thing.
+    v.body.setFlipX(facing === 'side' && dir < 0);
+
+    const changed = variant !== v.variant || facing !== v.facing;
+    v.variant = variant;
+    v.facing = facing;
+
+    if (walking) {
+      const key = walkAnim(variant, facing);
+      // `ignoreIfPlaying` keeps a continuous walk from restarting on frame 1
+      // every tick, which would freeze the cycle on its first pose.
+      if (changed || v.body.anims.getName() !== key || !v.body.anims.isPlaying) {
+        v.body.anims.play(key, true);
+      }
+    } else if (v.body.anims.isPlaying || changed) {
+      v.body.anims.stop();
+      // Idle is the passing pose, feet together — the natural place to stand.
+      v.body.setTexture(frameKey(variant, facing, 0));
+    }
   }
 
   update(_time: number, delta: number) {
@@ -275,46 +337,47 @@ export class MainScene extends Phaser.Scene {
 
     for (const p of b.players) {
       seen.add(p.seat);
-      const c = this.spriteFor(p);
-      const img = c.getByName('body') as Phaser.GameObjects.Image;
-      const tag = c.getByName('tag') as Phaser.GameObjects.Text;
-
+      const v = this.visFor(p);
       const isMe = p.seat === b.mySeat;
       if (isMe) me = p;
 
       // Reveal art: only ever for MY OWN sprite, and only once I have decrypted
       // my role. Other players' skins never change — that is the confidentiality
       // requirement, enforced here as well as on the wire.
-      const wantKey = isMe && b.isParasite ? 'parasite' : SKIN_KEYS[p.skin % SKIN_KEYS.length]!;
-      if (img.texture.key !== wantKey) {
-        img.setTexture(wantKey);
-        img.setDisplaySize((img.width / img.height) * 62, 62);
-      }
+      const want =
+        isMe && b.isParasite ? ensureParasite(this) : ensureSkin(this, p.skin);
 
       if (!p.alive) {
-        c.setAlpha(0.28);
-        tag.setColor('#8899aa');
+        v.c.setAlpha(0.28);
+        v.tag.setColor('#8899aa');
       } else {
-        c.setAlpha(p.connected ? 1 : 0.55);
-        tag.setColor(isMe ? '#7dffcd' : '#eafff8');
+        v.c.setAlpha(p.connected ? 1 : 0.55);
+        v.tag.setColor(isMe ? '#7dffcd' : '#eafff8');
       }
 
       // Smooth toward the authoritative position. My own sprite snaps harder so
       // input feels immediate; others interpolate so 20Hz looks continuous.
       const t = isMe ? 0.55 : Math.min(1, (delta / 1000) * 12);
-      c.x = Phaser.Math.Linear(c.x, p.x, t);
-      c.y = Phaser.Math.Linear(c.y, p.y, t);
-      c.setDepth(10 + c.y / 100);
+      const x = Phaser.Math.Linear(v.c.x, p.x, t);
+      const y = Phaser.Math.Linear(v.c.y, p.y, t);
 
-      img.setFlipX(p.dir < 0);
-      // Walk bob, driven by the server's `moving` flag.
-      img.y = p.moving && p.alive ? Math.sin(now / 90) * 2.5 : 0;
+      // Facing comes from where the sprite actually went this frame, so it
+      // follows the interpolated motion rather than leading it.
+      const facing = resolveFacing(x - v.fromX, y - v.fromY, v.facing);
+      v.fromX = x;
+      v.fromY = y;
+      v.c.x = x;
+      v.c.y = y;
+      // Sort by feet, so whoever is lower on the screen draws in front.
+      v.c.setDepth(10 + y / 100);
+
+      this.pose(v, want, facing, p.moving && p.alive, p.dir);
     }
 
-    for (const [seat, c] of this.sprites) {
+    for (const [seat, v] of this.people) {
       if (!seen.has(seat)) {
-        c.destroy();
-        this.sprites.delete(seat);
+        v.c.destroy();
+        this.people.delete(seat);
       }
     }
 
@@ -331,19 +394,27 @@ export class MainScene extends Phaser.Scene {
 
   private renderBodies() {
     const seen = new Set<Seat>();
+    const bySeat = new Map(this.bridge.players.map((p) => [p.seat, p]));
+
     for (const body of this.bridge.bodies) {
       seen.add(body.seat);
       let c = this.bodySprites.get(body.seat);
       if (!c) {
         c = this.add.container(body.x, body.y).setDepth(6);
-        const pool = this.add.ellipse(0, 6, 44, 20, 0x3a0f1c, 0.75);
-        const img = this.add.image(0, 0, 'infected');
-        img.setDisplaySize((img.width / img.height) * 52, 52);
-        img.setAngle(90).setTint(0x9fb8ae);
+
+        // Corpses always render human, whichever skin the victim wore and
+        // whatever killed them. A corpse drawn as infected would publish the
+        // victim's role to the entire lobby — see DECISIONS.md.
+        const skin = bySeat.get(body.seat)?.skin ?? 0;
+        const img = this.add.image(0, 0, ensureCorpse(this, skin));
+        img.setOrigin(0.5, ORIGIN_Y);
+        img.setDisplaySize(CELL_W, CELL_H);
+
         const mark = this.add
-          .text(0, -26, '☠', { fontFamily: 'monospace', fontSize: '15px', color: '#ff9aa8' })
+          .text(0, -30, '☠', { fontFamily: 'monospace', fontSize: '15px', color: '#ff9aa8' })
           .setOrigin(0.5);
-        c.add([pool, img, mark]);
+
+        c.add([img, mark]);
         this.bodySprites.set(body.seat, c);
       }
     }
@@ -406,4 +477,29 @@ export class MainScene extends Phaser.Scene {
 
     b.onContext({ taskInRange, jumpTargets, bodyInRange });
   }
+}
+
+/**
+ * Decide which of the three drawn views a character should show.
+ *
+ * The wire protocol has no facing field — `dir` is only `-1 | 1`, a left/right
+ * hint — so vertical facing is inferred here from the interpolated motion
+ * vector. That keeps the change purely visual: no new field, no protocol bump.
+ *
+ * The rules of thumb, in order:
+ *
+ * 1. Below the deadzone there is no motion worth honouring, so the facing stays
+ *    as it was. Without this, 20Hz interpolation noise makes an idle character
+ *    twitch between views.
+ * 2. Mostly-vertical motion takes the front or back view.
+ * 3. Everything else takes the side view, which is the most legible of the
+ *    three. The bias means only *noticeably* vertical motion switches away from
+ *    it, so a diagonal walk does not flicker between two facings on consecutive
+ *    frames. Left/right within the side view is handled by `dir`, which the
+ *    server does send.
+ */
+function resolveFacing(dx: number, dy: number, prev: Facing): Facing {
+  if (Math.hypot(dx, dy) < TURN_DEADZONE) return prev;
+  if (Math.abs(dy) > Math.abs(dx) * VERTICAL_BIAS) return dy < 0 ? 'up' : 'down';
+  return 'side';
 }

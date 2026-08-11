@@ -31,6 +31,14 @@ import {
 } from './chibi';
 
 /**
+ * Re-exported so the scene has a single art entry point: it needs the origin to
+ * stand sprites on their feet and the facing type to pick an animation, and
+ * neither is worth a second import of the drawing module.
+ */
+export { CELL_W, CELL_H, ORIGIN_Y } from './chibi';
+export type { Facing, Step } from './chibi';
+
+/**
  * Supersampling factor. Frames are drawn at 2x and displayed at 1x so the
  * curved silhouettes stay smooth — canvas antialiasing plus a linear
  * minification filter is what keeps these from looking like flat vector shapes.
