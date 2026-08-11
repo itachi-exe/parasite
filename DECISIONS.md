@@ -367,3 +367,163 @@ the wire protocol and the contracts were not to be touched.
   CSS silhouettes while the meeting overlay showed photo portraits of the same
   players. Consistency across the surface was worth more than consistency with
   the in-game sprites.
+
+---
+
+# UI/UX polish pass — 2026-08-11
+
+A later pass over the whole surface — lobby, HUD, overlays, minigames — with
+the `ui-ux-pro-max` skill installed and queried per area rather than skimmed
+once. Same constraints as the visual rebuild: no contract, server-rule or wire
+protocol changes. This pass touched no `shared` code at all, cosmetic or
+otherwise.
+
+The skill's priority table (accessibility → touch → performance → style →
+layout → type/colour → animation → forms → navigation) set the order, and that
+ordering earned its place: it put the two genuine WCAG failures ahead of a pile
+of things that merely looked improvable.
+
+## Contrast was measured, not eyeballed — and the palette mostly passed
+- **Chose:** Wrote the WCAG relative-luminance formula into a throwaway script
+  and ran every foreground/background pair in the HUD through it, including
+  alpha-composited ones (tinted buttons, banners, the room labels drawn at
+  `alpha 0.7` over their own floors).
+- **Why:** The interesting result was negative. Every *text* pair already
+  passed comfortably — `--text-dim` at 8.07:1, the danger red at 5.67:1, the
+  in-canvas room labels between 5.17 and 5.78:1 against the new baked floors,
+  station labels at 15:1. Guessing would have produced a confident, pointless
+  rewrite of colours that were already correct. Measuring is what located the
+  two things that were actually broken, both of them *non-text*:
+  - `--edge` (#1c5a45) sat at **2.05:1** against the panel, below the 3:1
+    WCAG 1.4.11 floor for the boundary of a UI component. Every input, vote
+    card and button outline in the game used it.
+  - The recessed fill `#06231a` was **1.00:1** against `--bg-panel` — a
+    numerically perfect match. Text fields and vote cards had *no* surface
+    distinction from the panel behind them; the border was doing all the work,
+    and the border was the thing failing.
+- **Fixed by** raising `--edge` to `#2a8365` (3.57:1 on panel, 3.16 on the
+  gradient's far end, 4.10 on the page) and introducing `--inset` (#03170f),
+  genuinely darker than the panel so a field reads as recessed before its
+  border is drawn. `--edge-soft` keeps the old value for hairlines that are
+  decoration rather than a control boundary.
+
+## Disabled state: the one place the exemption is the wrong call
+- **Chose:** `opacity: 0.42` → `0.65`, plus a slight desaturate.
+- **Why:** WCAG 1.4.3 explicitly exempts inactive controls, so 0.42 broke no
+  rule — button text was at 3.56:1 and dim text at **2.55:1**. But this HUD
+  inverts the usual assumption: `Use`, `Report`, `Jump` and `Purge` are
+  disabled for *most of a round*, because they gate on proximity. The disabled
+  state is not an edge case here, it is the resting state, and it is the state
+  a new player reads to learn what the buttons even do. Optimising for the
+  letter of the exemption would have optimised for the rarer case.
+
+## Focus was never styled, only inherited
+- **Chose:** One global `:focus-visible` ring in `--glow`, plus explicit rings
+  on the inputs that had replaced their outline with a border tint.
+- **Why:** There was no focus CSS anywhere — the app relied entirely on the
+  UA default ring, which on this near-black green is close to invisible in some
+  browsers and inconsistent across all of them. The game is keyboard-driven
+  (WASD), so a keyboard user is the *typical* user, not an accommodation.
+
+## The overlays were divs
+- **Chose:** A `useDialog` hook — focus in on mount, focus restored on unmount,
+  Tab wrapped inside the dialog, Escape where dismissing is legal.
+- **Why:** Four full-screen modals with no role, no focus management and no
+  keyboard exit. The hook takes `onClose` as *optional*, and that optionality
+  is the actual design decision: the meeting overlay and the end screen pass
+  nothing, because Escaping out of a vote you are required to attend, or out of
+  a terminal game-over screen, are not moves the game should offer. They get
+  focus containment without a dismiss path. Only `TaskModal` — where cancelling
+  is already a legal move via the backdrop — gets Escape.
+
+## The canvas is opaque, so it got a text alternative
+- **Chose:** An `sr-only` live region inside `.stage` naming the current area
+  and anything in reach, keyed on the area id so it fires on crossing a
+  threshold rather than per frame.
+- **Why:** A `<canvas>` tells a screen reader nothing, and this one contains
+  the entire game world. It is built from `areaAt()`, which already existed in
+  `shared` — so the most valuable accessibility addition in the pass needed no
+  new shared code, no new field, and no protocol change. The minimap canvas is
+  `aria-hidden` rather than described, because it would only repeat this.
+
+## Two mistakes I made and then corrected in the same pass
+- **The countdown in a live region.** My first cut put the meeting timer's
+  seconds inside `role="status"`. That is a region announcing four times a
+  second for the length of a meeting — it would have talked over the entire
+  discussion phase. Corrected to `role="timer"` with `aria-live="off"`:
+  readable when navigated to, silent while ticking, with the stage change
+  carrying the announcement instead.
+- **Assertive toasts.** Also my first cut. `assertive` interrupts whatever is
+  being read, and this stream mixes "Task faked. Nothing was submitted." with
+  real errors. A consistent `polite` is better than interrupting on routine
+  notices, so `role="log"` keeps its implicit politeness.
+- **Worth recording because** both were self-inflicted by applying a rule
+  ("announce state changes") without asking how often the state changes. The
+  frequency of a live region matters as much as its presence.
+
+## A dead control removed rather than wired up
+- **Chose:** Deleted the `Reveal the Parasite` button in `EndOverlay`; the note
+  beside it now states plainly that the game is waiting for the on-chain
+  reveal.
+- **Why:** The button called `setShowReveal(true)` and *nothing read that
+  state*. Tracing it: in simulated mode the server resolves the final reveal
+  itself via `resolveFinalRevealLocally`, and in Inco mode it waits for a
+  client — but no wire event exists for a client to submit one. So the button
+  could never have worked. Making it work means adding a socket event, which is
+  a protocol change and out of scope. Between a control that looks tappable and
+  does nothing and no control at all, the skill's own rule is unambiguous, and
+  it is right: the dead button actively misinforms.
+
+## Type: a 10px floor, not the 12px the rule asks for
+- **Chose:** Raised everything below 10px (`role-mode` at 8px, `crew-tag` at
+  8.5px, `crew-sub`/`pill`/`brand-sub` at 9px) to 10px+, and raised actual
+  reading text — task names, crew names, modal body, the Inco explainers — to
+  12–13px.
+- **Why:** The guideline is a 12px floor for *body* text, and I did not apply
+  it uniformly. A dense sci-fi HUD's micro-labels are a genre convention, and
+  the rails are 240px wide — forcing every uppercase mono label to 12px would
+  have wrapped the crew roster and cost more legibility than it bought. But 8px
+  has no defence at any density, so the floor moved to 10px and the prose moved
+  to 12px+. Documented as a deliberate partial application rather than a clean
+  pass.
+
+## Reduced motion reaches into the Phaser scene
+- **Chose:** A global `prefers-reduced-motion` block in CSS, plus a
+  `prefersReducedMotion()` check in `MainScene` that holds the task-station
+  glow at its mid value instead of running its `repeat: -1` pulse.
+- **Why:** A CSS media query cannot reach a canvas tween, and five markers
+  pulsing forever is exactly the case the preference exists for. The pulse
+  itself stays for everyone else: it marks objectives, so it is wayfinding, not
+  decoration. The camera lerp is deliberately *not* disabled — snapping the
+  view to the player every frame would be worse for motion sensitivity than
+  smoothing it, so "less motion" would have produced more.
+
+## Mobile got a real breakpoint, but not a real port
+- **Chose:** A single stacking breakpoint at 820px, `100dvh` instead of
+  `100vh`, safe-area padding, and a viewport meta that does *not* disable
+  zoom.
+- **Why:** The game needs a keyboard to play, so a touch port is not a polish
+  task. But three of these are near-free correctness fixes rather than a port:
+  `100vh` on mobile browsers measures the *largest* viewport and sits under the
+  collapsing URL bar, which clipped the action bar outright. The stacking
+  breakpoint stops a narrow laptop or a judge's half-width window from
+  squeezing the stage into a sliver between two rails.
+
+## An environment repair, recorded because it was not a code failure
+- The build failed on `EACCES` writing `packages/shared/dist/constants.js`. The
+  cause was **not** the changes: a previous build had been run as root, leaving
+  one root-owned file in `shared/dist` and the whole of `packages/web/.next`
+  root-owned. Both are gitignored build output. The single file was removed
+  (the directory is user-owned, so unlinking is permitted), and `.next` was
+  **moved aside to `.next.root-stale` rather than deleted**, because its
+  subdirectories are root-owned and cannot be emptied without privileges that
+  were correctly refused. `packages/web/.env` is also root-owned and was left
+  strictly alone.
+- **`.next.root-stale` is still on disk and needs `sudo rm -rf` to clear.**
+- A live smoke test initially appeared to pass and did not: `npm start` failed
+  with `EADDRINUSE` and the `curl` was hitting a *pre-existing server from an
+  earlier session* still serving the old build. Re-run on port 9137 against the
+  fresh build, it confirmed the real markup — dialog, radiogroup with
+  `aria-checked`, both `aria-describedby` helper texts, progressbar, toast log
+  — with no nesting or hydration warnings. The pre-existing process on 9100 was
+  left running, since it is not this pass's to kill.
