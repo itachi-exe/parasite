@@ -2,19 +2,58 @@
   --bg-deep: #04130f;
   --bg-panel: #0a231b;
   --bg-panel-2: #0d2e24;
-  --edge: #1c5a45;
+  /* Boundary colour for inputs, panels and cards. 3.57:1 against --bg-panel,
+     clearing the 3:1 WCAG 1.4.11 floor for UI-component boundaries; the old
+     #1c5a45 sat at 2.05:1 and vanished at a glance. */
+  --edge: #2a8365;
+  /* Decorative-only separator, for hairlines that are not a control boundary. */
+  --edge-soft: #1c5a45;
   --glow: #3affc0;
   --glow-soft: #8affd4;
   --text: #e8fff7;
   --text-dim: #8fbfb0;
   --danger: #ff5f7e;
-  --danger-dim: #a83a52;
+  --danger-dim: #c9506a;
   --warn: #ffc861;
   --parasite: #7cff4f;
+  /* Recessed fill (inputs, cards, wells). Darker than the panel it sits on so
+     the surface reads as inset even before its border is drawn. */
+  --inset: #03170f;
+  /* Motion tokens. 180ms micro / 240ms transitional, inside the 150-300ms
+     guideline; both collapse to 0.01ms under prefers-reduced-motion. */
+  --dur-fast: 180ms;
+  --dur-mid: 240ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+  /* Minimum comfortable hit area for primary controls. */
+  --hit: 44px;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Focus is never removed, only restyled. Every interactive element inherits
+   this ring; :focus-visible keeps it off mouse clicks. */
+:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0.01ms;
+    --dur-mid: 0.01ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 html,
@@ -34,9 +73,14 @@ button {
   cursor: pointer;
 }
 
+/* 0.42 put disabled button text at 3.56:1 and dim text at 2.55:1 — unreadable,
+   and the action bar sits disabled most of a round, so these labels are exactly
+   the ones a player squints at to learn why they cannot act. 0.65 keeps the
+   state clearly de-emphasised while holding 6.4:1. */
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.42;
+  opacity: 0.65;
+  filter: saturate(0.55);
 }
 
 /* ── Shell ─────────────────────────────────────────────────────────────────── */
@@ -63,12 +107,12 @@ button:disabled {
 }
 
 .panel-title {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.16em;
   color: var(--glow);
   text-transform: uppercase;
   padding: 9px 11px 6px;
-  border-bottom: 1px solid rgba(28, 90, 69, 0.55);
+  border-bottom: 1px solid var(--edge-soft);
   margin: 0;
 }
 
@@ -98,8 +142,8 @@ button:disabled {
 }
 
 .brand-sub {
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: 10px;
+  letter-spacing: 0.2em;
   color: var(--text-dim);
 }
 
@@ -114,7 +158,8 @@ button:disabled {
 .progress-label {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
+  gap: 8px;
+  font-size: 11px;
   color: var(--text-dim);
   letter-spacing: 0.1em;
   margin-bottom: 4px;
@@ -122,7 +167,7 @@ button:disabled {
 
 .progress-track {
   height: 9px;
-  background: #06231a;
+  background: var(--inset);
   border: 1px solid var(--edge);
   border-radius: 5px;
   overflow: hidden;
@@ -132,7 +177,7 @@ button:disabled {
   height: 100%;
   background: linear-gradient(90deg, #1f9c74, var(--glow));
   box-shadow: 0 0 12px rgba(58, 255, 192, 0.65);
-  transition: width 0.35s ease;
+  transition: width var(--dur-mid) var(--ease-out);
 }
 
 /* ── Role badge ────────────────────────────────────────────────────────────── */
@@ -144,7 +189,7 @@ button:disabled {
   padding: 7px 13px;
   border-radius: 8px;
   border: 1px solid var(--edge);
-  background: #06231a;
+  background: var(--inset);
   min-width: 168px;
 }
 
@@ -189,8 +234,8 @@ button:disabled {
 }
 
 .role-mode {
-  font-size: 8px;
-  letter-spacing: 0.14em;
+  font-size: 10px;
+  letter-spacing: 0.1em;
   color: var(--text-dim);
 }
 
@@ -204,22 +249,34 @@ button:disabled {
 
 /* ── Buttons ───────────────────────────────────────────────────────────────── */
 
+/* min-height is the 44px hit-area floor: these are the primary in-game controls
+   (Map / Use / Report / Jump / Purge) and were computing to ~33px. Transitions
+   name their properties rather than `all`, so a paint-only hover cannot
+   accidentally animate layout. */
 .btn {
   background: #0d3428;
   border: 1px solid var(--edge);
   color: var(--text);
-  padding: 9px 15px;
+  padding: 11px 16px;
+  min-height: var(--hit);
   border-radius: 7px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  transition: all 0.16s;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .btn:hover:not(:disabled) {
   background: #145240;
   border-color: var(--glow);
   box-shadow: 0 0 14px rgba(58, 255, 192, 0.3);
+}
+
+/* Pressed feedback without moving layout bounds. */
+.btn:active:not(:disabled) {
+  background: #17604a;
 }
 
 .btn-danger {
@@ -247,7 +304,8 @@ button:disabled {
 }
 
 .btn-lg {
-  padding: 13px 26px;
+  padding: 14px 26px;
+  min-height: 50px;
   font-size: 13px;
 }
 
@@ -306,12 +364,12 @@ button:disabled {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 7px 8px;
+  padding: 8px;
   border-radius: 6px;
   border: 1px solid transparent;
   margin-bottom: 4px;
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .task.active {
@@ -321,7 +379,7 @@ button:disabled {
 }
 
 .task.done {
-  opacity: 0.48;
+  opacity: 0.62;
 }
 
 .task-check {
@@ -340,7 +398,7 @@ button:disabled {
 
 .task-where {
   color: var(--text-dim);
-  font-size: 9.5px;
+  font-size: 10.5px;
   letter-spacing: 0.06em;
 }
 
@@ -354,7 +412,7 @@ button:disabled {
   border-radius: 7px;
   margin-bottom: 4px;
   border: 1px solid transparent;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .crew.me {
@@ -362,15 +420,17 @@ button:disabled {
   background: rgba(58, 255, 192, 0.08);
 }
 
+/* A dead row still has to be readable — it is the roster you scan during a
+   meeting. Paired with the DEAD tag, so the state is never colour-only. */
 .crew.dead {
-  opacity: 0.42;
+  opacity: 0.62;
 }
 
 .crew-avatar {
   width: 34px;
   height: 34px;
   border-radius: 6px;
-  background: #06231a;
+  background: var(--inset);
   border: 1px solid var(--edge);
   object-fit: contain;
   object-position: top;
@@ -390,33 +450,36 @@ button:disabled {
 }
 
 .crew-sub {
-  font-size: 9px;
+  font-size: 10.5px;
   color: var(--text-dim);
-  letter-spacing: 0.07em;
+  letter-spacing: 0.05em;
 }
 
 .crew-tag {
-  font-size: 8.5px;
-  padding: 2px 5px;
+  font-size: 10px;
+  padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid var(--edge);
   color: var(--text-dim);
+  flex-shrink: 0;
 }
 
 /* ── Bottom action bar ─────────────────────────────────────────────────────── */
 
+/* 62px = the 44px hit floor plus the 9px vertical padding on each side, so a
+   full-height button no longer overflows its own bar. */
 .actionbar {
   grid-area: bottom;
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 9px 13px;
-  min-height: 58px;
+  min-height: 62px;
   flex-wrap: wrap;
 }
 
 .hint {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
   letter-spacing: 0.08em;
 }
@@ -468,7 +531,7 @@ button:disabled {
 
 .modal p {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -480,46 +543,76 @@ button:disabled {
 }
 
 .field label {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   color: var(--text-dim);
   text-transform: uppercase;
 }
 
 .field input {
-  background: #06231a;
+  background: var(--inset);
   border: 1px solid var(--edge);
   border-radius: 7px;
-  padding: 10px 12px;
+  padding: 12px;
+  min-height: var(--hit);
   color: var(--text);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
-.field input:focus {
+.field input:focus-visible {
   border-color: var(--glow);
   box-shadow: 0 0 12px rgba(58, 255, 192, 0.22);
+  outline: 2px solid var(--glow);
+  outline-offset: 1px;
 }
 
 .skins {
   display: flex;
-  gap: 9px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .skin {
-  width: 62px;
-  height: 78px;
+  width: 68px;
+  height: 84px;
   border-radius: 8px;
   border: 2px solid var(--edge);
-  background: #06231a;
+  background: var(--inset);
   padding: 3px;
-  transition: all 0.16s;
+  position: relative;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.skin:hover:not(.sel) {
+  border-color: var(--glow-soft);
 }
 
 .skin.sel {
   border-color: var(--glow);
   box-shadow: 0 0 16px rgba(58, 255, 192, 0.36);
+}
+
+/* Selection is marked with a tick as well as the ring, so the chosen scientist
+   is not signalled by colour alone. */
+.skin.sel::after {
+  content: '✔';
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--glow);
+  color: #04130f;
+  font-size: 11px;
+  line-height: 19px;
+  text-align: center;
+  font-weight: 700;
 }
 
 .skin img {
@@ -542,12 +635,15 @@ button:disabled {
   align-items: center;
   gap: 9px;
   padding: 9px;
+  min-height: 56px;
   border-radius: 9px;
   border: 1px solid var(--edge);
-  background: #06231a;
-  transition: all 0.16s;
+  background: var(--inset);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
   text-align: left;
   color: var(--text);
+  font-size: 12.5px;
 }
 
 .vote-card:hover:not(:disabled) {
@@ -560,11 +656,25 @@ button:disabled {
   background: rgba(58, 255, 192, 0.16);
 }
 
+/* The cast vote gets a mark, not just a tint — a voted card and a hovered card
+   were otherwise nearly the same colour. */
+.vote-card.voted::after {
+  content: '✔';
+  margin-left: auto;
+  color: var(--glow);
+  font-weight: 700;
+}
+
+.vote-card.voted .vote-count {
+  margin-left: 8px;
+}
+
 .vote-card img {
   width: 38px;
   height: 38px;
   object-fit: contain;
   object-position: top;
+  flex-shrink: 0;
 }
 
 .vote-count {
@@ -575,11 +685,33 @@ button:disabled {
 }
 
 .timer {
-  font-size: 26px;
+  font-size: 30px;
+  font-weight: 700;
   color: var(--glow);
   letter-spacing: 0.11em;
   text-align: center;
   text-shadow: 0 0 16px rgba(58, 255, 192, 0.45);
+  /* Digits share a cell so the countdown does not reflow every second. */
+  font-variant-numeric: tabular-nums;
+  margin: 6px 0;
+}
+
+/* Under 10 seconds the timer turns amber and pulses. Colour alone would not
+   carry it, so the component also switches to an explicit "Ns left" label. */
+.timer.urgent {
+  color: var(--warn);
+  text-shadow: 0 0 18px rgba(255, 200, 97, 0.5);
+  animation: timer-pulse 1s var(--ease-out) infinite;
+}
+
+@keyframes timer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.62;
+  }
 }
 
 /* Toasts */
@@ -597,23 +729,33 @@ button:disabled {
 }
 
 .toast {
-  padding: 8px 15px;
+  padding: 9px 15px;
   border-radius: 7px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   letter-spacing: 0.05em;
   border: 1px solid var(--edge);
   background: rgba(10, 35, 27, 0.96);
-  animation: toast-in 0.2s ease;
+  animation: toast-in var(--dur-fast) var(--ease-out);
 }
 
+/* Kind is carried by a leading glyph as well as the border colour, so warnings
+   and errors are still distinguishable without colour vision. */
 .toast.warn {
   border-color: var(--warn);
   color: var(--warn);
 }
 
+.toast.warn::before {
+  content: '⚠ ';
+}
+
 .toast.error {
   border-color: var(--danger);
   color: #ffd6de;
+}
+
+.toast.error::before {
+  content: '✕ ';
 }
 
 @keyframes toast-in {
@@ -631,13 +773,15 @@ button:disabled {
 
 .mg-bar {
   height: 22px;
-  background: #06231a;
+  background: var(--inset);
   border: 1px solid var(--edge);
   border-radius: 6px;
   overflow: hidden;
   margin: 13px 0;
 }
 
+/* Kept linear and short: this one tracks a held button frame by frame, so it is
+   a direct readout of input rather than a UI transition. */
 .mg-fill {
   height: 100%;
   background: linear-gradient(90deg, #1f9c74, var(--glow));
@@ -647,18 +791,21 @@ button:disabled {
 .mg-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
-  gap: 9px;
+  gap: 10px;
   margin: 15px 0;
 }
 
 .mg-cell {
   aspect-ratio: 1;
+  min-height: var(--hit);
   border-radius: 8px;
   border: 1px solid var(--edge);
-  background: #06231a;
+  background: var(--inset);
   color: var(--text);
   font-size: 19px;
-  transition: all 0.14s;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .mg-cell.hot {
@@ -668,12 +815,14 @@ button:disabled {
 }
 
 .mg-cell.done {
-  opacity: 0.34;
+  opacity: 0.55;
 }
 
+/* 44px tall track so the thumb is grabbable; the input itself is only ~20px. */
 .mg-slider {
   width: 100%;
-  margin: 9px 0;
+  height: var(--hit);
+  margin: 4px 0;
   accent-color: #3affc0;
 }
 
@@ -700,18 +849,23 @@ button:disabled {
 
 .muted {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .mono-note {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--text-dim);
   line-height: 1.6;
-  background: #06231a;
+  background: var(--inset);
   border: 1px solid var(--edge);
   border-radius: 7px;
-  padding: 9px 11px;
+  padding: 10px 12px;
   margin-top: 11px;
+}
+
+.mono-note code {
+  color: var(--glow-soft);
+  word-break: break-all;
 }
 
 .row {
@@ -722,12 +876,13 @@ button:disabled {
 }
 
 .pill {
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.11em;
-  padding: 3px 8px;
+  padding: 4px 9px;
   border-radius: 999px;
   border: 1px solid var(--edge);
   color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .pill.ok {
@@ -740,8 +895,63 @@ button:disabled {
   color: var(--danger);
 }
 
+/* Utility for text that must exist for a screen reader but not be drawn. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 @media (max-width: 1080px) {
   .shell {
     grid-template-columns: 190px 1fr 200px;
+  }
+}
+
+/* Below 820px the three-column shell cannot hold two 190px rails and a usable
+   stage, so the rails drop under the canvas and scroll with the page. The stage
+   keeps a minimum height so the game never collapses to a sliver. */
+@media (max-width: 820px) {
+  html,
+  body {
+    overflow: auto;
+  }
+
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(320px, 58vh) auto auto auto;
+    grid-template-areas:
+      'top'
+      'stage'
+      'bottom'
+      'left'
+      'right';
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    max-height: 42vh;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 9px 12px;
+  }
+
+  .topbar-spacer {
+    display: none;
+  }
+
+  .progress-wrap {
+    order: 3;
+    flex: 1 1 100%;
   }
 }
