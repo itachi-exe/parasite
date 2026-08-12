@@ -238,15 +238,11 @@ export default function MenuBackdrop() {
     // behind it, so a green glow *behind* a green figure — the first attempt —
     // rendered it invisible. It needs the opposite: a dark plate to sit
     // against, and the glow pushed out to a halo around the silhouette.
-    pen.fill(0x030b0a, 0.66);
-    pen.ellipse(1215, 690, 165, 215);
-    pen.fill(0x02090a, 0.45);
-    pen.ellipse(1215, 720, 120, 165);
-    // 6.2x, not 10.4x. The art is authored to read at ~40px; at ten times that
-    // its eye and spore pods stop being features and become large flat circles
-    // strewn across the right third of the screen — which is precisely what they
-    // looked like. Smaller shows the whole creature and lets it read as one.
-    place(pen, 1215, 858, 6.2, true, () =>
+    pen.fill(0x030b0a, 0.72);
+    pen.ellipse(1180, 560, 250, 330);
+    pen.fill(0x02090a, 0.5);
+    pen.ellipse(1180, 600, 190, 280);
+    place(pen, 1180, 884, 10.4, true, () =>
       drawCharacter(pen, {
         pal: PARASITE_PAL,
         accessory: 'scanner',
