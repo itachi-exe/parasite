@@ -526,7 +526,7 @@ function rack(pen: Pen, x: number, y: number, w: number, h: number, t: RoomTheme
       pen.circle(x + w - 9, uy + 4.5, 1.9);
     }
   }
-  pen.line(1.3, 0x000000, 0.5);
+  pen.line(2.4, 0x05100c, 0.95);
   pen.strokeRoundRect(x, y, w, h, 3);
 }
 
@@ -621,7 +621,7 @@ function toolbox(pen: Pen, x: number, y: number, t: RoomTheme): void {
   pen.roundRect(x, y, 26, 9, { tl: 2.5, tr: 2.5 });
   pen.fill(0x0e1512, 0.8);
   pen.rect(x + 9, y + 6, 8, 3);
-  pen.line(1.2, 0x0b120f, 0.7);
+  pen.line(2.2, 0x05100c, 0.95);
   pen.strokeRoundRect(x, y, 26, 16, 2.5);
 }
 
@@ -755,7 +755,7 @@ export function drawProps(pen: Pen, o: PropOpts): void {
       pen.fill(t.accent, 0.7);
       pen.circle(o.x + 144 + i * 26, o.y + 30, 4);
     }
-    pen.line(1.4, 0x1a1526, 0.7);
+    pen.line(2.4, 0x0d0a16, 0.95);
     pen.strokeRoundRect(o.x + 130, o.y + 22, 130, 22, 4);
     return;
   }

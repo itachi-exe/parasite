@@ -76,9 +76,21 @@ body {
   height: 100%;
   background: var(--bg-deep);
   color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  /* Was ui-monospace everywhere. A whole UI set in mono reads as a terminal or
+     a dashboard — it was the loudest "unfinished tool" signal on the screen.
+     The display face carries the interface now; mono is kept deliberately, for
+     the few places where it means something (contract addresses, codes). */
+  font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
+  font-weight: 500;
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+/* Mono stays for machine text only — addresses, env keys, room codes. */
+code,
+.mono-note code,
+#lobby-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 button {
@@ -1399,11 +1411,18 @@ button.vote-card:hover:not(:disabled) {
 .shell > .actionbar {
   position: absolute;
   z-index: 2;
-  background: rgba(15, 21, 27, 0.82);
-  backdrop-filter: blur(7px);
-  border: 1px solid var(--edge);
-  border-radius: 12px;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
+  /* Opaque and heavily outlined, not translucent glass with a hairline. Frosted
+     panels over a busy canvas are the default "AI dashboard" surface and they
+     read as unfinished; the reference uses solid plates with thick dark borders
+     and a light inner bevel, which is what makes a panel look built. */
+  background: #131a20;
+  border: 3px solid #05090c;
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 0 0 1px rgba(122, 168, 184, 0.22),
+    0 10px 0 rgba(3, 6, 9, 0.55),
+    0 18px 34px rgba(0, 0, 0, 0.5);
 }
 
 /* ── Top bar: brand + progress only, hugging the top-left ─────────────────── */
@@ -1488,10 +1507,13 @@ button.vote-card:hover:not(:disabled) {
   min-height: 66px;
   padding: 0;
   border-radius: 50%;
-  background: rgba(15, 21, 27, 0.9);
-  border: 2px solid var(--edge);
-  backdrop-filter: blur(7px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  background: #182229;
+  border: 3px solid #05090c;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px rgba(122, 168, 184, 0.28),
+    0 5px 0 rgba(3, 6, 9, 0.7),
+    0 12px 20px rgba(0, 0, 0, 0.5);
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -1557,9 +1579,12 @@ button.vote-card:hover:not(:disabled) {
   height: 132px;
   padding: 0;
   border-radius: 50%;
-  border: 3px solid var(--edge);
-  background: rgba(10, 14, 19, 0.9);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+  border: 4px solid #05090c;
+  background: #0e141a;
+  box-shadow:
+    inset 0 0 0 2px rgba(122, 168, 184, 0.3),
+    0 8px 0 rgba(3, 6, 9, 0.6),
+    0 16px 30px rgba(0, 0, 0, 0.55);
   /* Not `hidden`: the room caption below is a ::after positioned at top:100%,
      and clipping to the dial swallowed it entirely. The canvas is sized to fit
      inside the circle instead, so there is nothing to clip. */

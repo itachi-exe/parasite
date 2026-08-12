@@ -148,13 +148,17 @@ function eye(pen: Pen, pal: CharPalette, x: number, y: number, s = 1): void {
  * in both directions. This is the single biggest readability win in the pass and
  * the cheapest.
  */
-function key(pen: Pen, pal: CharPalette, a = 0.85): void {
-  pen.line(1.5, pal.outline, a);
+function key(pen: Pen, pal: CharPalette, a = 1): void {
+  // 2.8px opaque, not 1.5px at 85%. The reference art this project is measured
+  // against is built on heavy, fully-opaque linework — it is the single loudest
+  // signal separating "illustrated character" from "coloured shapes", and a
+  // hairline keyline at a 40px display size reads as no keyline at all.
+  pen.line(2.8, pal.outline, a);
 }
 
 /** A lighter inner keyline, for seams and panels *inside* the silhouette. */
-function seam(pen: Pen, pal: CharPalette, a = 0.4): void {
-  pen.line(1, pal.outline, a);
+function seam(pen: Pen, pal: CharPalette, a = 0.55): void {
+  pen.line(1.5, pal.outline, a);
 }
 
 
