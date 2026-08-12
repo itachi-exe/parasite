@@ -26,6 +26,16 @@ import {
   blobPts,
   tendrilPts,
   arcPts,
+  softShadow,
+  softShadowRect,
+  bloom,
+  gradRect,
+  insetShade,
+  pool,
+  ellipsePts,
+  warm,
+  cool,
+  mix,
 } from './pen';
 import { ENV, VINES, type RoomTheme } from './palette';
 
@@ -39,6 +49,16 @@ export interface Rect {
 /** How far walls stand out from the walkable rect. Drawn outward, never into it. */
 export const WALL_T = 11;
 
+/**
+ * How far a doorway lamp sits in from a room's corner.
+ *
+ * Shared between {@link drawRoomFloor}, which pools light under the lamps, and
+ * {@link drawOutpost}, which places them. They were separate literals, and a
+ * light pool that does not line up with its lamp is worse than no pool at all —
+ * it reads as a stain.
+ */
+export const LAMP_INSET = 20;
+
 // ── Floors ───────────────────────────────────────────────────────────────────
 
 export interface FloorOpts extends Rect {
@@ -50,15 +70,47 @@ export interface FloorOpts extends Rect {
  * A room's floor. Three treatments, because "clinical lab" and "greenhouse"
  * wanting different *patterns* rather than different tints is most of what
  * makes a room feel like a place.
+ *
+ * The floor is then *lit*, in three passes that are the whole difference between
+ * a room and a rectangle:
+ *
+ *  1. A vertical ramp across the whole slab — the far wall is further from the
+ *     lamps, so the top of the room sits darker than the bottom.
+ *  2. A warm pool under each of the four doorway lamps. Four lamps that emit
+ *     light but never *land* it anywhere is the flattest thing this map did.
+ *  3. Ambient occlusion feathered inward from all four walls, replacing the two
+ *     hard bands (14px at 16% black on the top, 12px at 10% down the left) that
+ *     read as a painted border rather than as a corner falling into shadow.
  */
 export function drawRoomFloor(pen: Pen, o: FloorOpts): void {
   const r = rng(o.seed);
-  pen.fill(o.theme.floor, 1);
-  pen.rect(o.x, o.y, o.w, o.h);
+  // Base is a ramp, not a flat fill: cooler and darker at the back of the room,
+  // warmer toward the camera. 14 bands is invisible as banding at play scale.
+  gradRect(pen, o.x, o.y, o.w, o.h, cool(o.theme.floor, 0.22), warm(o.theme.floor, 0.06), {
+    bands: 14,
+  });
 
   if (o.theme.pattern === 'tile') tiles(pen, o, r);
   else if (o.theme.pattern === 'moss') mossFloor(pen, o, r);
   else deck(pen, o, r);
+
+  // Lamp pools, in the lamp's own accent warmed toward the work-lamp colour, so
+  // the light on the floor and the light in the fixture are the same light.
+  //
+  // Kept deliberately tight and faint. The first attempt used 108x92 at 0.3 and
+  // the four pools met in the middle of the room, which is not lighting — it is
+  // fog, and it washed the floor pattern out entirely. A pool has to have an
+  // *edge* somewhere inside the room or it is just a brightness change.
+  const lit = mix(o.theme.accent, ENV.lamp, 0.55);
+  const pr = Math.min(64, o.w * 0.2, o.h * 0.24);
+  for (const [lx, ly] of [
+    [o.x + LAMP_INSET, o.y + LAMP_INSET],
+    [o.x + o.w - LAMP_INSET, o.y + LAMP_INSET],
+    [o.x + LAMP_INSET, o.y + o.h - LAMP_INSET],
+    [o.x + o.w - LAMP_INSET, o.y + o.h - LAMP_INSET],
+  ] as const) {
+    pool(pen, lx, ly, pr, pr * 0.86, { color: lit, alpha: 0.14, bands: 9 });
+  }
 
   // Grime gathering where the floor meets the walls — the cheapest way to stop
   // a floor reading as a flat slab pasted onto the ground.
@@ -67,10 +119,15 @@ export function drawRoomFloor(pen: Pen, o: FloorOpts): void {
   pen.rect(o.x, o.y + o.h - 4, o.w, 4);
   pen.rect(o.x, o.y, 4, o.h);
   pen.rect(o.x + o.w - 4, o.y, 4, o.h);
-  pen.fill(0x000000, 0.16);
-  pen.rect(o.x, o.y, o.w, 14);
-  pen.fill(0x000000, 0.1);
-  pen.rect(o.x, o.y, 12, o.h);
+
+  // Occlusion under the walls, deepest where the light does not reach. The top
+  // and left edges face the light, so they occlude least; bottom and right get
+  // the deeper falloff.
+  const ao = { color: ENV.bounce, alpha: 0.3 } as const;
+  insetShade(pen, o, 'top', 26, { ...ao, alpha: 0.34 });
+  insetShade(pen, o, 'left', 22, ao);
+  insetShade(pen, o, 'bottom', 18, { ...ao, alpha: 0.2 });
+  insetShade(pen, o, 'right', 16, { ...ao, alpha: 0.18 });
 }
 
 /** Clinical grid. Alternating tones, grout lines, a bevel on each tile. */
@@ -221,10 +278,20 @@ function deck(pen: Pen, o: FloorOpts, r: () => number): void {
 // props are placed around the room edges where players have no reason to be and
 // clear of every task station.
 
-/** Contact shadow. Props that skip this float. */
+/**
+ * Contact shadow. Props that skip this float.
+ *
+ * One soft stack rather than one hard rect at 40% — this is the single highest-
+ * leverage function in the file, because every prop routes through it, so a prop
+ * either sits on the floor or hovers over it depending on this one call.
+ */
 function shade(pen: Pen, x: number, y: number, w: number, h: number): void {
-  pen.fill(ENV.wallShadow, 0.4);
-  pen.roundRect(x + 2, y + 5, w, h, 5);
+  softShadowRect(pen, x + 2, y + 5, w, h, 5, {
+    color: ENV.wallShadow,
+    alpha: 0.42,
+    layers: 4,
+    spread: 1.4,
+  });
 }
 
 /** A lab bench seen from above: worktop, front face, dark underside. */
@@ -260,9 +327,9 @@ function monitor(pen: Pen, x: number, y: number, t: RoomTheme): void {
   pen.rect(x - 10, y - 15, 12, 1.6);
   pen.rect(x - 10, y - 11, 17, 1.6);
   pen.rect(x - 10, y - 7, 9, 1.6);
-  // Screen spill onto the bench.
-  pen.fill(t.accent, 0.16);
-  pen.ellipse(x, y + 6, 22, 8);
+  // Screen spill onto the bench, on the same falloff as every other light source
+  // in the map rather than as one flat ellipse of its own invention.
+  pool(pen, x, y + 6, 24, 9, { color: t.accent, alpha: 0.3, bands: 6 });
 }
 
 /** Stool, from directly above: a disc, a shadow, three legs peeking out. */
@@ -276,8 +343,7 @@ function monitor(pen: Pen, x: number, y: number, t: RoomTheme): void {
  * the near side is the side that shows.
  */
 function stool(pen: Pen, x: number, y: number, t: RoomTheme): void {
-  pen.fill(ENV.wallShadow, 0.4);
-  pen.ellipse(x + 2, y + 12, 12, 6);
+  softShadow(pen, x + 2, y + 12, 12, 6, { color: ENV.wallShadow, alpha: 0.44, spread: 1.5 });
 
   // Three legs, all toward the viewer, ending in feet on the floor line.
   for (const [a, len] of [
@@ -310,17 +376,13 @@ function stool(pen: Pen, x: number, y: number, t: RoomTheme): void {
   pen.ellipse(x - 1.4, y - 2.4, 6.4, 3.8);
   pen.fill(t.scuff, 0.4);
   pen.ellipse(x - 2.4, y - 3.2, 3.8, 2);
-  // Pen has no strokeEllipse, so the rim is an explicit point ring.
-  const ring = (rx: number, ry: number, a0: number, a1: number, n: number): Pt[] =>
-    Array.from({ length: n + 1 }, (_, i) => {
-      const a = a0 + ((a1 - a0) * i) / n;
-      return [x + Math.cos(a) * rx, y + Math.sin(a) * ry] as Pt;
-    });
-
+  // The Pen has no strokeEllipse; `ellipsePts` in pen.ts is the shared point ring
+  // this used to hand-roll. The accent lip is the near half of it.
+  const rim = ellipsePts(x, y, 11, 7.6, 24);
   pen.line(1.2, t.accent, 0.24);
-  pen.strokePoly(ring(9.8, 6.6, Math.PI * 0.12, Math.PI * 0.88, 10));
-  pen.line(1, 0x101619, 0.55);
-  pen.strokePoly(ring(11, 7.6, 0, Math.PI * 2, 20), true);
+  pen.strokePoly(ellipsePts(x, y, 9.8, 6.6, 24).slice(1, 12));
+  pen.line(1, 0x101619, 0.65);
+  pen.strokePoly(rim, true);
 }
 
 /**
@@ -363,8 +425,11 @@ function cable(pen: Pen, x0: number, y0: number, x1: number, y1: number, bow: nu
 
 /** Specimen tank: a lit cylinder with something suspended in it. */
 function tank(pen: Pen, x: number, y: number, rx: number, t: RoomTheme): void {
-  pen.fill(ENV.wallShadow, 0.45);
-  pen.ellipse(x + 3, y + 10, rx + 2, rx * 0.5 + 2);
+  softShadow(pen, x + 3, y + 10, rx + 2, rx * 0.5 + 2, {
+    color: ENV.wallShadow,
+    alpha: 0.48,
+    spread: 1.45,
+  });
   pen.fill(0x1a1424, 1);
   pen.roundRect(x - rx, y - rx * 1.5, rx * 2, rx * 2.2, rx * 0.7);
   pen.fill(t.accent, 0.34);
@@ -557,25 +622,41 @@ export function drawProps(pen: Pen, o: PropOpts): void {
  */
 export function drawFoliageClump(
   pen: Pen,
-  o: { x: number; y: number; scale: number; seed: number }
+  o: { x: number; y: number; scale: number; seed: number; depth?: number }
 ): void {
   const r = rng(o.seed);
   const s = o.scale;
 
-  // Ground shadow the clump sits in.
-  pen.fill(ENV.soilDark, 0.55);
-  pen.poly(blobPts(o.x + 3 * s, o.y + 5 * s, 26 * s, 0.34, r, 9));
+  // Ground shadow the clump sits in. Soft, so a plant is bedded into the soil
+  // rather than pasted on top of a dark blob the same shape as itself.
+  softShadow(pen, o.x + 3 * s, o.y + 5 * s, 26 * s, 21 * s, {
+    color: ENV.soilDark,
+    alpha: 0.6,
+    layers: 3,
+    spread: 1.3,
+  });
 
   // Each clump picks a depth band. Without this every clump lands in the same
   // narrow value range and the jungle reads as one repeated stamp — variety in
   // *brightness* does far more for it than variety in shape.
-  const depth = r();
+  //
+  // The bands are wider than they were: the old top band topped out at frond[2],
+  // so the brightest plant in the jungle was still darker than every room floor
+  // and the whole canopy sat in a two-stop range. The near band now reaches
+  // frondLit, which is what gives the foreground something to *be* in front of.
+  // `o.depth` lets the composition assign a band instead of leaving it to the
+  // seed: the background pass wants the dark end and the foreground pass the
+  // bright end, which is what makes them read as different distances rather than
+  // as the same jungle drawn twice. Still consumes r() either way, so forcing a
+  // depth cannot shift the rest of this clump's random sequence.
+  const rolled = r();
+  const depth = o.depth ?? rolled;
   const band: readonly [number, number, number] =
     depth < 0.42
       ? [ENV.soilDark, ENV.canopy[0]!, ENV.canopy[1]!]
       : depth < 0.8
-        ? [ENV.canopy[0]!, ENV.canopy[1]!, ENV.frond[0]!]
-        : [ENV.canopy[1]!, ENV.frond[0]!, ENV.frond[2]!];
+        ? [ENV.canopy[0]!, ENV.canopy[2]!, ENV.frond[0]!]
+        : [ENV.canopy[2]!, ENV.frond[1]!, ENV.frondLit];
 
   // Three species, so the jungle is a jungle and not one leaf stamped 300
   // times. They differ in blade count, length and width — a broadleaf is few
@@ -796,9 +877,15 @@ export function wallsFor(rect: Rect, others: readonly Rect[]): WallSeg[] {
  * the world, consistently with the character rim light.
  */
 export function drawWall(pen: Pen, s: WallSeg): void {
-  // Cast shadow, thrown down-right onto whatever the wall stands on.
-  pen.fill(ENV.wallShadow, 0.5);
-  pen.rect(s.x + 4, s.y + 5, s.w, s.h);
+  // Cast shadow, thrown down-right onto whatever the wall stands on. Soft, and
+  // wider than the wall: a hard-edged rect offset by four pixels reads as a
+  // duplicate of the wall rather than as the shadow of one.
+  softShadowRect(pen, s.x + 4, s.y + 5, s.w, s.h, 2, {
+    color: ENV.wallShadow,
+    alpha: 0.55,
+    layers: 4,
+    spread: 1.8,
+  });
 
   pen.fill(ENV.wallDark, 1);
   pen.rect(s.x, s.y, s.w, s.h);
@@ -839,8 +926,12 @@ export function drawRailing(pen: Pen, s: WallSeg): void {
   const w = vertical ? t : s.w;
   const h = vertical ? s.h : t;
 
-  pen.fill(ENV.wallShadow, 0.45);
-  pen.rect(x + 3, y + 4, w, h);
+  softShadowRect(pen, x + 3, y + 4, w, h, 2, {
+    color: ENV.wallShadow,
+    alpha: 0.46,
+    layers: 3,
+    spread: 1.3,
+  });
   pen.fill(ENV.pathGrime, 1);
   pen.rect(x, y, w, h);
   pen.fill(ENV.pathPlank, 1);
@@ -864,12 +955,10 @@ export function drawRailing(pen: Pen, s: WallSeg): void {
  * it is the game's visual signature — but now sitting on a real floor.
  */
 export function drawLamp(pen: Pen, x: number, y: number, tint: number = ENV.bio): void {
-  pen.fill(tint, 0.1);
-  pen.circle(x, y, 26);
-  pen.fill(tint, 0.16);
-  pen.circle(x, y, 15);
-  pen.fill(tint, 0.5);
-  pen.circle(x, y, 6.5);
+  // Was a hand-rolled three-ring stack at 0.1/0.16/0.5. `bloom` is that idiom
+  // generalised, on a cubic radius falloff — wide halo, tight core, which is how
+  // a point source actually behaves.
+  bloom(pen, x, y, 7, { color: tint, alpha: 0.52, layers: 5, spread: 3.8 });
   pen.fill(ENV.bioCore, 0.95);
   pen.circle(x, y, 3);
   // Filament flare.
@@ -964,10 +1053,10 @@ export function drawOutpost(
     if (s.kind === 'path') continue;
     const theme = themes[s.area] ?? themes['meeting']!;
     for (const [lx, ly] of [
-      [s.x + 20, s.y + 20],
-      [s.x + s.w - 20, s.y + 20],
-      [s.x + 20, s.y + s.h - 20],
-      [s.x + s.w - 20, s.y + s.h - 20],
+      [s.x + LAMP_INSET, s.y + LAMP_INSET],
+      [s.x + s.w - LAMP_INSET, s.y + LAMP_INSET],
+      [s.x + LAMP_INSET, s.y + s.h - LAMP_INSET],
+      [s.x + s.w - LAMP_INSET, s.y + s.h - LAMP_INSET],
     ] as const) {
       drawLamp(pen, lx, ly, theme.accent);
     }
