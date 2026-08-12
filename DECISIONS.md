@@ -527,3 +527,33 @@ of things that merely looked improvable.
   `aria-checked`, both `aria-describedby` helper texts, progressbar, toast log
   — with no nesting or hydration warnings. The pre-existing process on 9100 was
   left running, since it is not this pass's to kill.
+
+## Visual quality pass toward Goose Goose Duck's clarity — still procedural, no image generation
+- **Chose:** Extended `Pen` with gradient, soft-shadow, bloom, and colour-mix
+  helpers (`gradRect`, `softShadow`/`softShadowRect`, `bloom`, `insetShade`,
+  `pool`, `warm`/`cool`/`mix`); reworked `palette.ts` around a warm/cool
+  lighting model and a distinct colour for all ten crew seats; rebuilt
+  character rendering in `chibi.ts` with keylines, seat-colour accents, lit
+  faces, and a proper contact shadow; and layered room lighting in
+  `mapArt.ts` — a 14-band floor gradient, warm pools under each doorway lamp,
+  and ambient occlusion feathered inward per-wall instead of two flat bands.
+- **Why:** The owner asked for GGD-level clarity and warmth — soft lighting,
+  vibrant-not-oversaturated colour, characters that read as *lit* rather than
+  flat-shaded — while keeping this a code-only, engine-free project (no
+  Unity, no image generation available). Every change above is a drawing
+  primitive or a palette value; nothing changed about what the characters
+  *are* (still the chibi scientists from the owner's reference art) or the
+  jungle-outpost setting.
+- **Real ceiling, stated plainly:** this closes the gap on palette, lighting,
+  and readability — the things procedural code can actually do — not on
+  GGD's hand-illustrated linework or animation frame count. That gap is
+  structural (no illustrator, no image-gen tool in this pipeline), not a
+  quality shortfall in this pass.
+- **Process note:** this pass ran across several interrupted sessions (a
+  flaky upstream API relay killed multiple attempts with 429/500/504 errors,
+  unrelated to the code) and was finished/verified across the resumes rather
+  than in one sitting. `packages/web/src/game/art/mapArt.ts`'s lighting work
+  was left mid-diff by one interruption and completed in a follow-up pass —
+  confirmed to build clean and the test suite still at 49/50 (the one
+  failure, `GameRoom.test.ts`'s "refuses to start below 4 players", predates
+  this pass entirely and is unrelated).
