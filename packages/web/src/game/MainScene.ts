@@ -139,7 +139,6 @@ export class MainScene extends Phaser.Scene {
     right: Phaser.Input.Keyboard.Key;
   };
   private lastSent = { ax: 0, ay: 0, at: 0 };
-  private jumpRing!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('main');
@@ -160,8 +159,6 @@ export class MainScene extends Phaser.Scene {
 
     this.drawMap();
     this.drawStations();
-
-    this.jumpRing = this.add.graphics().setDepth(5);
 
     const kb = this.input.keyboard!;
     this.keys = {
@@ -517,12 +514,6 @@ export class MainScene extends Phaser.Scene {
           break;
         }
       }
-    }
-
-    this.jumpRing.clear();
-    if (b.isParasite && me.alive) {
-      this.jumpRing.lineStyle(1.5, 0x8affd4, jumpTargets.length ? 0.5 : 0.16);
-      this.jumpRing.strokeCircle(me.x, me.y, JUMP_RANGE);
     }
 
     b.onContext({ taskInRange, jumpTargets, bodyInRange });

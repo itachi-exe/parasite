@@ -1,17 +1,26 @@
 :root {
-  --bg-deep: #04130f;
-  --bg-panel: #0a231b;
-  --bg-panel-2: #0d2e24;
-  /* Boundary colour for inputs, panels and cards. 3.57:1 against --bg-panel,
-     clearing the 3:1 WCAG 1.4.11 floor for UI-component boundaries; the old
-     #1c5a45 sat at 2.05:1 and vanished at a glance. */
-  --edge: #2a8365;
+  /* Neutral dark chrome, not green. Green was the base colour of every panel,
+     border and text tint here before — which is exactly backwards, because
+     --parasite below is ALSO green, and it is supposed to mean something
+     (infection/role-reveal) rather than being one more shade of a palette
+     that was already all one hue. Base chrome went cool neutral slate; the
+     signature interactive accent moved to cyan (matching the lab-a room
+     accent already in art/palette.ts) so it reads as its own colour instead
+     of a paler version of the parasite signal. Every ratio below was
+     recomputed against the new backgrounds, not carried over by assumption.
+   */
+  --bg-deep: #0a0e13;
+  --bg-panel: #131a20;
+  --bg-panel-2: #182029;
+  /* Boundary colour for inputs, panels and cards. 3.71:1 against --bg-panel,
+     clearing the 3:1 WCAG 1.4.11 floor for UI-component boundaries. */
+  --edge: #4a7a8a;
   /* Decorative-only separator, for hairlines that are not a control boundary. */
-  --edge-soft: #1c5a45;
-  --glow: #3affc0;
-  --glow-soft: #8affd4;
-  --text: #e8fff7;
-  --text-dim: #8fbfb0;
+  --edge-soft: #2a4652;
+  --glow: #4ad9f0;
+  --glow-soft: #8fe3f5;
+  --text: #eaf4f5;
+  --text-dim: #93b8c2;
   --danger: #ff5f7e;
   --danger-dim: #c9506a;
   --warn: #ffc861;
@@ -22,7 +31,7 @@
   --crew-bright: #79c9ee;
   /* Recessed fill (inputs, cards, wells). Darker than the panel it sits on so
      the surface reads as inset even before its border is drawn. */
-  --inset: #03170f;
+  --inset: #080d11;
   /* Motion tokens. 180ms micro / 240ms transitional, inside the 150-300ms
      guideline; both collapse to 0.01ms under prefers-reduced-motion. */
   --dur-fast: 180ms;
@@ -112,7 +121,7 @@ button:disabled {
   background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
   border: 1px solid var(--edge);
   border-radius: 10px;
-  box-shadow: 0 0 22px rgba(58, 255, 192, 0.06) inset;
+  box-shadow: 0 0 22px rgba(74, 217, 240, 0.06) inset;
 }
 
 .panel-title {
@@ -147,7 +156,7 @@ button:disabled {
   font-weight: 700;
   letter-spacing: 0.19em;
   color: var(--glow);
-  text-shadow: 0 0 14px rgba(58, 255, 192, 0.5);
+  text-shadow: 0 0 14px rgba(74, 217, 240, 0.5);
 }
 
 .brand-sub {
@@ -184,8 +193,8 @@ button:disabled {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #1f9c74, var(--glow));
-  box-shadow: 0 0 12px rgba(58, 255, 192, 0.65);
+  background: linear-gradient(90deg, #1f8fa8, var(--glow));
+  box-shadow: 0 0 12px rgba(74, 217, 240, 0.65);
   transition: width var(--dur-mid) var(--ease-out);
 }
 
@@ -263,7 +272,7 @@ button:disabled {
    name their properties rather than `all`, so a paint-only hover cannot
    accidentally animate layout. */
 .btn {
-  background: #0d3428;
+  background: #16232a;
   border: 1px solid var(--edge);
   color: var(--text);
   padding: 11px 16px;
@@ -278,14 +287,14 @@ button:disabled {
 }
 
 .btn:hover:not(:disabled) {
-  background: #145240;
+  background: #1c3540;
   border-color: var(--glow);
-  box-shadow: 0 0 14px rgba(58, 255, 192, 0.3);
+  box-shadow: 0 0 14px rgba(74, 217, 240, 0.3);
 }
 
 /* Pressed feedback without moving layout bounds. */
 .btn:active:not(:disabled) {
-  background: #17604a;
+  background: #21404d;
 }
 
 .btn-danger {
@@ -383,8 +392,8 @@ button:disabled {
 
 .task.active {
   border-color: var(--glow);
-  background: rgba(58, 255, 192, 0.09);
-  box-shadow: 0 0 12px rgba(58, 255, 192, 0.16);
+  background: rgba(74, 217, 240, 0.09);
+  box-shadow: 0 0 12px rgba(74, 217, 240, 0.16);
 }
 
 .task.done {
@@ -426,7 +435,7 @@ button:disabled {
 
 .crew.me {
   border-color: var(--glow);
-  background: rgba(58, 255, 192, 0.08);
+  background: rgba(74, 217, 240, 0.08);
 }
 
 /* A dead row still has to be readable — it is the roster you scan during a
@@ -528,7 +537,7 @@ button:disabled {
   width: min(94vw, 720px);
   max-height: 88vh;
   overflow-y: auto;
-  box-shadow: 0 0 60px rgba(58, 255, 192, 0.13);
+  box-shadow: 0 0 60px rgba(74, 217, 240, 0.13);
 }
 
 .modal h2 {
@@ -585,7 +594,7 @@ button:disabled {
 
 .field input:focus-visible {
   border-color: var(--glow);
-  box-shadow: 0 0 12px rgba(58, 255, 192, 0.22);
+  box-shadow: 0 0 12px rgba(74, 217, 240, 0.22);
   outline: 2px solid var(--glow);
   outline-offset: 1px;
 }
@@ -614,7 +623,7 @@ button:disabled {
 
 .skin.sel {
   border-color: var(--glow);
-  box-shadow: 0 0 16px rgba(58, 255, 192, 0.36);
+  box-shadow: 0 0 16px rgba(74, 217, 240, 0.36);
 }
 
 /* Selection is marked with a tick as well as the ring, so the chosen scientist
@@ -670,12 +679,12 @@ button:disabled {
    a non-interactive row must not light up under the cursor. */
 button.vote-card:hover:not(:disabled) {
   border-color: var(--glow);
-  background: rgba(58, 255, 192, 0.1);
+  background: rgba(74, 217, 240, 0.1);
 }
 
 .vote-card.voted {
   border-color: var(--glow);
-  background: rgba(58, 255, 192, 0.16);
+  background: rgba(74, 217, 240, 0.16);
 }
 
 /* The cast vote gets a mark, not just a tint — a voted card and a hovered card
@@ -708,7 +717,7 @@ button.vote-card:hover:not(:disabled) {
   color: var(--glow);
   letter-spacing: 0.11em;
   text-align: center;
-  text-shadow: 0 0 16px rgba(58, 255, 192, 0.45);
+  text-shadow: 0 0 16px rgba(74, 217, 240, 0.45);
   /* Digits share a cell so the countdown does not reflow every second. */
   font-variant-numeric: tabular-nums;
   margin: 6px 0;
@@ -802,7 +811,7 @@ button.vote-card:hover:not(:disabled) {
    a direct readout of input rather than a UI transition. */
 .mg-fill {
   height: 100%;
-  background: linear-gradient(90deg, #1f9c74, var(--glow));
+  background: linear-gradient(90deg, #1f8fa8, var(--glow));
   transition: width 0.1s linear;
 }
 
@@ -828,8 +837,8 @@ button.vote-card:hover:not(:disabled) {
 
 .mg-cell.hot {
   border-color: var(--glow);
-  background: rgba(58, 255, 192, 0.2);
-  box-shadow: 0 0 14px rgba(58, 255, 192, 0.36);
+  background: rgba(74, 217, 240, 0.2);
+  box-shadow: 0 0 14px rgba(74, 217, 240, 0.36);
 }
 
 .mg-cell.done {
