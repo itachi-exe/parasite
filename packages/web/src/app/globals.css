@@ -1821,3 +1821,49 @@ button.vote-card:hover:not(:disabled) {
   border-radius: 4px;
   padding: 1px 5px;
 }
+
+/* Phone widths. At 430px the top bar's brand + progress + role badge cannot
+   coexist on one row — it ran off the right edge — and the minimap caption
+   overflowed the viewport. Progress drops out (it is repeated in the task
+   panel), the brand loses its sub-line, and the caption is allowed to wrap
+   into the dial's own width. */
+@media (max-width: 560px) {
+  .shell > .topbar {
+    max-width: calc(100vw - 128px);
+    padding: 6px 10px;
+    gap: 9px;
+  }
+  .shell > .topbar .progress-wrap {
+    display: none;
+  }
+  .shell > .topbar .brand-sub {
+    display: none;
+  }
+  .shell > .topbar .brand-title {
+    font-size: 13px;
+  }
+  .role-badge {
+    min-width: 0;
+    padding: 5px 9px;
+  }
+  .minimap {
+    width: 92px;
+    height: 92px;
+    border-width: 3px;
+  }
+  .minimap::after {
+    max-width: 108px;
+    font-size: 8.5px;
+    letter-spacing: 0.06em;
+  }
+  .shell > .sidebar-left {
+    width: 158px;
+    max-height: 30vh;
+    top: calc(max(10px, env(safe-area-inset-top)) + 58px);
+  }
+  .shell > .actionbar {
+    gap: 10px;
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+  }
+}

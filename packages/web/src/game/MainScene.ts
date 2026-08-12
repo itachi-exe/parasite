@@ -148,9 +148,36 @@ export class MainScene extends Phaser.Scene {
     this.bridge = data.bridge;
   }
 
+  /**
+   * Pull the camera in on the player.
+   *
+   * The view was drawn at 1:1, which put a 64x76 character on a 1280px-wide
+   * screen at roughly 5% of its height — technically the proportion the
+   * reference uses, but the reference is doing it with hand-illustrated art
+   * that still holds up small. Ours is drawn from primitives and simply loses
+   * its detail at that size, so the camera moves closer instead.
+   *
+   * Scaled against a 1280x800 baseline rather than pinned to a constant: at a
+   * fixed zoom a phone in portrait would see almost nothing of the room, and
+   * the whole point of a social-deduction map is watching who walks where.
+   * Clamped so a very wide monitor cannot pull so far back that it undoes this.
+   */
+  private applyZoom = () => {
+    const cam = this.cameras.main;
+    const w = this.scale.gameSize.width || 1280;
+    const h = this.scale.gameSize.height || 800;
+    const fit = Math.min(w / 1280, h / 800);
+    cam.setZoom(Math.max(1.35, Math.min(2.1, 1.75 * fit)));
+  };
+
   create() {
     this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT);
     this.cameras.main.setBackgroundColor('#04130f');
+    this.applyZoom();
+    // RESIZE scale mode means the camera viewport follows the window, so the
+    // zoom has to be recomputed when it changes or a phone rotation leaves the
+    // view either cropped or showing far more map than intended.
+    this.scale.on('resize', this.applyZoom, this);
 
     // No preload(): there are no image files. Every sprite in this game is baked
     // from drawing primitives at boot, which is why the loader is empty and the
