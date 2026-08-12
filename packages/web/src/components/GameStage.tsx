@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { RoomState, Seat, TaskId, PublicPlayer } from '@parasite/shared';
+import type { RoomState, Seat, TaskId } from '@parasite/shared';
 import { TASK_DEFS } from '@parasite/shared';
 import type { SceneBridge } from '@/game/MainScene';
 
@@ -12,6 +12,12 @@ import type { SceneBridge } from '@/game/MainScene';
  * would break Next's server render. The bridge object is mutated in place rather
  * than replaced so the scene reads fresh data every frame without React needing
  * to re-render at 60fps.
+ *
+ * `positions` is handed straight through as the same ref-backed Map, unmerged.
+ * It's mutated by the socket layer many times a second with no React re-render
+ * at all, so merging it here (in the render body) would only ever pick up the
+ * rare re-renders triggered by a full `state` snapshot — MainScene merges it
+ * fresh every Phaser frame instead, which is where "every frame" is actually true.
  */
 export default function GameStage(props: {
   state: RoomState | null;
@@ -25,6 +31,7 @@ export default function GameStage(props: {
   const gameRef = useRef<unknown>(null);
   const bridge = useRef<SceneBridge>({
     players: [],
+    positions: props.positions,
     bodies: [],
     mySeat: null,
     isParasite: false,
@@ -37,7 +44,8 @@ export default function GameStage(props: {
 
   // Keep the bridge current every render. Mutation, not replacement.
   const b = bridge.current;
-  b.players = mergePositions(props.state?.players ?? [], props.positions);
+  b.players = props.state?.players ?? [];
+  b.positions = props.positions;
   b.bodies = props.state?.bodies ?? [];
   b.mySeat = props.mySeat;
   b.isParasite = props.isParasite;
@@ -83,20 +91,4 @@ export default function GameStage(props: {
   }, []);
 
   return <div ref={hostRef} style={{ width: '100%', height: '100%' }} />;
-}
-
-/**
- * Overlay the fast position channel onto the last full snapshot.
- *
- * Full snapshots are only sent on structural change, so without this players
- * would visibly freeze between them.
- */
-function mergePositions(
-  players: PublicPlayer[],
-  positions: Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>
-): PublicPlayer[] {
-  return players.map((p) => {
-    const live = positions.get(p.seat);
-    return live ? { ...p, x: live.x, y: live.y, dir: live.dir, moving: live.moving } : p;
-  });
 }

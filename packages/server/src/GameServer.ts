@@ -297,7 +297,8 @@ export class GameServer {
           (room.phase === 'playing' || room.phase === 'meeting') &&
           this.tickCount % every === 0
         ) {
-          this.io.to(room.code).emit('positions', room.positionsPayload());
+          const pp = room.positionsPayload();
+          this.io.to(room.code).emit('positions', pp);
         }
       }
     }, TICK_MS);

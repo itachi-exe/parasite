@@ -38,6 +38,13 @@ import { THEMES } from './art/palette';
 export interface SceneBridge {
   /** Latest authoritative snapshot from the server. */
   players: PublicPlayer[];
+  /**
+   * Live positions from the server's high-frequency channel, keyed by seat.
+   * Mutated in place by the socket layer — read fresh every Phaser frame here
+   * rather than merged in React, since a ref mutation does not trigger a
+   * React re-render and `players` above may go stale between full snapshots.
+   */
+  positions: Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>;
   bodies: { seat: Seat; x: number; y: number }[];
   mySeat: Seat | null;
   /** Local player's own role, if they have revealed it to themselves. */
@@ -356,10 +363,15 @@ export class MainScene extends Phaser.Scene {
     }
 
     // ── Render players ───────────────────────────────────────────────────────
+    // Merge fresh every frame: b.players is only the last full snapshot (React
+    // re-renders rarely), b.positions is a ref-backed Map updated ~20x/sec by
+    // the socket layer with no React re-render at all. Reading both here is
+    // what actually gives 60fps-fresh movement.
+    const players = this.mergedPlayers();
     const seen = new Set<Seat>();
     let me: PublicPlayer | null = null;
 
-    for (const p of b.players) {
+    for (const p of players) {
       seen.add(p.seat);
       const v = this.visFor(p);
       const isMe = p.seat === b.mySeat;
@@ -405,20 +417,34 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
-    this.renderBodies();
+    this.renderBodies(players);
 
     if (me) {
       this.cameras.main.centerOn(
         Phaser.Math.Linear(this.cameras.main.midPoint.x, me.x, 0.12),
         Phaser.Math.Linear(this.cameras.main.midPoint.y, me.y, 0.12)
       );
-      this.renderContext(me);
+      this.renderContext(me, players);
     }
   }
 
-  private renderBodies() {
+  /**
+   * Overlay live positions (from the high-frequency socket channel) onto the
+   * last full player snapshot. Must be recomputed every frame — b.positions
+   * is mutated in place and never triggers a React re-render, so caching
+   * this anywhere longer-lived than a single frame reintroduces the bug.
+   */
+  private mergedPlayers(): PublicPlayer[] {
+    const b = this.bridge;
+    return b.players.map((p) => {
+      const live = b.positions.get(p.seat);
+      return live ? { ...p, x: live.x, y: live.y, dir: live.dir, moving: live.moving } : p;
+    });
+  }
+
+  private renderBodies(players: PublicPlayer[]) {
     const seen = new Set<Seat>();
-    const bySeat = new Map(this.bridge.players.map((p) => [p.seat, p]));
+    const bySeat = new Map(players.map((p) => [p.seat, p]));
 
     for (const body of this.bridge.bodies) {
       seen.add(body.seat);
@@ -454,7 +480,7 @@ export class MainScene extends Phaser.Scene {
    * Work out what the player can act on and hand it to React, which owns the
    * action buttons. Also draws the Parasite's jump range ring.
    */
-  private renderContext(me: PublicPlayer) {
+  private renderContext(me: PublicPlayer, players: PublicPlayer[]) {
     const b = this.bridge;
 
     let taskInRange: TaskId | null = null;
@@ -479,7 +505,7 @@ export class MainScene extends Phaser.Scene {
     let bodyInRange: Seat | null = null;
 
     if (me.alive) {
-      for (const p of b.players) {
+      for (const p of players) {
         if (p.seat === me.seat || !p.alive) continue;
         if (Math.hypot(me.x - p.x, me.y - p.y) <= JUMP_RANGE) {
           jumpTargets.push({ seat: p.seat, name: p.name });
