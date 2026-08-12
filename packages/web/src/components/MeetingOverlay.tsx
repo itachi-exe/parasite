@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MeetingState, PublicPlayer, Seat } from '@parasite/shared';
 import { useDialog } from '@/hooks/useDialog';
 
@@ -40,6 +40,24 @@ export default function MeetingOverlay(props: {
 
   const secondsLeft = Math.max(0, Math.ceil((meeting.endsAt - now) / 1000));
   const urgent = secondsLeft <= 10;
+
+  /*
+   * Timer as a bar as well as a number (DESIGN.md §9): the reference shows time
+   * draining rather than counting, which is readable at a glance mid-argument.
+   *
+   * MeetingState carries only `endsAt`, not a duration, so the full length is
+   * captured the first time each stage is seen and reused for the rest of it.
+   * A protocol change to send the duration would be tidier, but this is a
+   * visual pass and the wire format is shared with the server.
+   */
+  const stageSpan = useRef<{ stage: string; total: number }>({ stage: '', total: 1 });
+  if (stageSpan.current.stage !== meeting.stage) {
+    stageSpan.current = {
+      stage: meeting.stage,
+      total: Math.max(1, Math.ceil((meeting.endsAt - Date.now()) / 1000)),
+    };
+  }
+  const timePct = Math.max(0, Math.min(100, (secondsLeft / stageSpan.current.total) * 100));
   const me = players.find((p) => p.seat === mySeat);
   const myVote = mySeat !== null ? meeting.votes[mySeat] : undefined;
   const alive = players.filter((p) => p.alive);
@@ -75,6 +93,12 @@ export default function MeetingOverlay(props: {
         */}
         {meeting.stage === 'discussion' && (
           <>
+            <div className="meet-timerbar" aria-hidden="true">
+              <div
+                className={`meet-timerfill${urgent ? ' urgent' : ''}`}
+                style={{ width: `${timePct}%` }}
+              />
+            </div>
             <div
               className={`timer${urgent ? ' urgent' : ''}`}
               role="timer"
@@ -91,6 +115,12 @@ export default function MeetingOverlay(props: {
 
         {meeting.stage === 'voting' && (
           <>
+            <div className="meet-timerbar" aria-hidden="true">
+              <div
+                className={`meet-timerfill${urgent ? ' urgent' : ''}`}
+                style={{ width: `${timePct}%` }}
+              />
+            </div>
             <div
               className={`timer${urgent ? ' urgent' : ''}`}
               role="timer"
@@ -102,22 +132,38 @@ export default function MeetingOverlay(props: {
             <p className="sr-only" role="status">
               Voting is open.
             </p>
+            {/*
+              The whole roster, not just the living. The reference greys the
+              dead in place with a marker, which is what makes "who is left"
+              readable without counting — dropping them from the grid instead
+              silently reflows every remaining card each time someone dies.
+            */}
             <div className="vote-grid" role="group" aria-label="Cast your vote">
-              {alive.map((p) => (
-                <button
-                  key={p.seat}
-                  className={`vote-card${myVote === p.seat ? ' voted' : ''}`}
-                  disabled={!me?.alive || myVote !== undefined}
-                  aria-pressed={myVote === p.seat}
-                  onClick={() => onVote(p.seat)}
-                >
-                  <img src={SKIN_SRC[p.skin % 4]} alt="" />
-                  <span>
-                    {p.name}
-                    {p.seat === mySeat ? ' (you)' : ''}
-                  </span>
-                </button>
-              ))}
+              {players.map((p) =>
+                p.alive ? (
+                  <button
+                    key={p.seat}
+                    className={`vote-card${myVote === p.seat ? ' voted' : ''}`}
+                    disabled={!me?.alive || myVote !== undefined}
+                    aria-pressed={myVote === p.seat}
+                    onClick={() => onVote(p.seat)}
+                  >
+                    <img src={SKIN_SRC[p.skin % 4]} alt="" />
+                    <span>
+                      {p.name}
+                      {p.seat === mySeat ? ' (you)' : ''}
+                    </span>
+                  </button>
+                ) : (
+                  <div key={p.seat} className="vote-card dead" aria-label={`${p.name}, dead`}>
+                    <img src={SKIN_SRC[p.skin % 4]} alt="" />
+                    <span>{p.name}</span>
+                    <span className="dead-tag" aria-hidden="true">
+                      FOUND
+                    </span>
+                  </div>
+                )
+              )}
               <button
                 className={`vote-card${myVote === 'skip' ? ' voted' : ''}`}
                 disabled={!me?.alive || myVote !== undefined}

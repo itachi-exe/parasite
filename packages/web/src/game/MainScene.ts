@@ -284,15 +284,23 @@ export class MainScene extends Phaser.Scene {
     body.setOrigin(0.5, ORIGIN_Y);
     body.setDisplaySize(CELL_W, CELL_H);
 
+    // Name plate (DESIGN.md §5/§7). The old tag was 12px on a 67%-opaque
+    // near-black wash, which vanished over lit floors and bright foliage — the
+    // two places a name matters most, because "who did I just see in the
+    // greenhouse" is the entire game. Opaque plate, tighter type, hard
+    // stroke, so it reads over anything the map can put behind it.
     const tag = this.add
       .text(0, -66, p.name, {
         fontFamily: 'monospace',
-        fontSize: '12px',
+        fontSize: '11px',
         color: '#eafff8',
-        backgroundColor: '#04130faa',
-        padding: { x: 4, y: 1 },
+        backgroundColor: '#0a0e13e8',
+        padding: { x: 6, y: 3 },
+        stroke: '#04080b',
+        strokeThickness: 3,
       })
       .setOrigin(0.5, 1);
+    tag.setShadow(0, 2, '#000000', 4, false, true);
 
     c.add([shadow, body, tag]);
     const v: Vis = { c, body, tag, variant, facing: 'down', fromX: p.x, fromY: p.y };

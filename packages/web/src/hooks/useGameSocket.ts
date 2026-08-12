@@ -8,6 +8,7 @@ import type {
   SkinId,
   TaskId,
   MeetingResult,
+  MeetingReason,
   EndState,
 } from '@parasite/shared';
 import { SERVER_URL } from '@/lib/contract';
@@ -27,6 +28,11 @@ export interface UseGameSocket {
   end: EndState | null;
   /** SIMULATED MODE ONLY: role handed to this socket by the server. */
   simulatedRole: boolean | null;
+  /**
+   * Why the last meeting started, plus a nonce so two body reports in a row
+   * are two distinct events rather than one unchanged object.
+   */
+  lastAlert: { reason: MeetingReason; nonce: number } | null;
   /** Live positions, updated at the server tick rate between full snapshots. */
   positions: Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>;
   join: (opts: { code: string; name: string; skin: SkinId; address: string | null }) => Promise<void>;
@@ -58,6 +64,10 @@ export function useGameSocket(): UseGameSocket {
   const [lastMeetingResult, setLastMeetingResult] = useState<MeetingResult | null>(null);
   const [end, setEnd] = useState<EndState | null>(null);
   const [simulatedRole, setSimulatedRole] = useState<boolean | null>(null);
+  const [lastAlert, setLastAlert] = useState<{ reason: MeetingReason; nonce: number } | null>(
+    null
+  );
+  const alertNonce = useRef(0);
   const positions = useRef(
     new Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>()
   );
@@ -106,6 +116,12 @@ export function useGameSocket(): UseGameSocket {
     );
 
     socket.on('simulatedRole', (p: { isParasite: boolean }) => setSimulatedRole(p.isParasite));
+
+    // The banner listens to this. `meetingStarted` already carries who reported
+    // what, so the loud moment needs no new wire traffic.
+    socket.on('meetingStarted', (p: { reason: MeetingReason; endsAt: number }) => {
+      setLastAlert({ reason: p.reason, nonce: ++alertNonce.current });
+    });
     socket.on('meetingResult', (r: MeetingResult) => setLastMeetingResult(r));
     socket.on('gameEnded', (e: EndState) => setEnd(e));
     socket.on('toast', (t: { kind: Toast['kind']; text: string }) => pushToast(t.kind, t.text));
@@ -164,6 +180,7 @@ export function useGameSocket(): UseGameSocket {
     lastMeetingResult,
     end,
     simulatedRole,
+    lastAlert,
     positions: positions.current,
     join,
     startGame: () => simpleAction('startGame'),

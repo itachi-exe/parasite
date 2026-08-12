@@ -25,6 +25,7 @@ import TaskList from './TaskList';
 import CrewList from './CrewList';
 import TaskModal from './TaskModal';
 import MeetingOverlay from './MeetingOverlay';
+import AlertBanner, { type AlertPayload } from './AlertBanner';
 import MiniMap from './MiniMap';
 import GameStage from './GameStage';
 import RoleBadge from './RoleBadge';
@@ -201,6 +202,22 @@ export default function GameClient() {
       setJumping(false);
     }
   }, [nearestPlayer, sock, role.mode, submitJump]);
+
+  // The banner takes names, not seats, so it can be read without the roster.
+  const alertPayload: AlertPayload | null = useMemo(() => {
+    const a = sock.lastAlert;
+    if (!a) return null;
+    const nameOf = (seat: Seat) =>
+      state?.players.find((p) => p.seat === seat)?.name ?? 'someone';
+    return a.reason.kind === 'body'
+      ? {
+          kind: 'body',
+          victim: nameOf(a.reason.victimSeat),
+          actor: nameOf(a.reason.reporterSeat),
+          nonce: a.nonce,
+        }
+      : { kind: 'emergency', actor: nameOf(a.reason.callerSeat), nonce: a.nonce };
+  }, [sock.lastAlert, state?.players]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const phase = state?.phase ?? 'lobby';
@@ -408,6 +425,8 @@ export default function GameClient() {
             : ''}
         </span>
       </footer>
+
+      <AlertBanner alert={alertPayload} />
 
       {/* Overlays */}
       {inLobby && (

@@ -1627,3 +1627,172 @@ button.vote-card:hover:not(:disabled) {
     min-height: 58px;
   }
 }
+
+/* ── The loud moment ───────────────────────────────────────────────────────── */
+/*
+ * DESIGN.md §8. A body turning up is the hinge the round swings on and it was
+ * getting the same 4-second corner toast as "Task faked." This is the whole
+ * screen for 2.6s, then gone. pointer-events: none throughout — it announces,
+ * it never blocks the meeting overlay arriving underneath it.
+ */
+.alert-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: alert-fade 2.6s var(--ease-out) forwards;
+}
+
+.alert-streak {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 152px;
+  transform-origin: center;
+  animation: alert-streak 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.alert-banner.danger .alert-streak {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 60, 92, 0) 0%,
+    rgba(255, 60, 92, 0.5) 18%,
+    rgba(255, 95, 126, 0.95) 50%,
+    rgba(255, 60, 92, 0.5) 82%,
+    rgba(255, 60, 92, 0) 100%
+  );
+  box-shadow: 0 0 90px rgba(255, 60, 92, 0.6);
+}
+
+.alert-banner.warn .alert-streak {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 200, 97, 0) 0%,
+    rgba(255, 200, 97, 0.5) 18%,
+    rgba(255, 214, 130, 0.95) 50%,
+    rgba(255, 200, 97, 0.5) 82%,
+    rgba(255, 200, 97, 0) 100%
+  );
+  box-shadow: 0 0 90px rgba(255, 200, 97, 0.55);
+}
+
+.alert-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: alert-pop 2.6s var(--ease-out) forwards;
+}
+
+.alert-title {
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: clamp(34px, 7.2vw, 84px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-transform: uppercase;
+  /* Stacked hard shadows rather than -webkit-text-stroke, which thins a heavy
+     weight from the inside. */
+  text-shadow:
+    0 5px 0 rgba(6, 3, 5, 0.92),
+    0 0 34px rgba(0, 0, 0, 0.65);
+}
+
+.alert-sub {
+  font-size: clamp(11px, 1.7vw, 15px);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+@keyframes alert-streak {
+  0% { transform: scaleX(0.2); opacity: 0; }
+  14% { transform: scaleX(1); opacity: 1; }
+  76% { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes alert-pop {
+  0% { transform: scale(0.82); opacity: 0; }
+  16% { transform: scale(1); opacity: 1; }
+  78% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.04); opacity: 0; }
+}
+
+@keyframes alert-fade {
+  0%, 92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* A 2.6-second full-screen sweep is exactly what this preference is for. The
+   announcement still happens — role="alert" carries it — it just holds still. */
+@media (prefers-reduced-motion: reduce) {
+  .alert-streak,
+  .alert-inner,
+  .alert-banner {
+    animation-duration: 2.6s !important;
+    animation-name: alert-hold !important;
+  }
+  @keyframes alert-hold {
+    0%, 90% { opacity: 1; transform: none; }
+    100% { opacity: 0; transform: none; }
+  }
+}
+
+/* ── Meeting screen ────────────────────────────────────────────────────────── */
+/* DESIGN.md §9: accent-bordered panel, time draining as a bar, dead players
+   greyed in place rather than dropped from the grid. */
+
+.overlay .modal:has(#meeting-heading) {
+  border: 2px solid var(--danger-dim);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.meet-timerbar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--inset);
+  border: 1px solid var(--edge);
+  overflow: hidden;
+  margin: 10px 0 8px;
+}
+
+.meet-timerfill {
+  height: 100%;
+  background: linear-gradient(90deg, #1f8fa8, var(--glow));
+  /* Linear, not eased: this is a direct readout of remaining time, and an
+     easing curve here would misreport how much is actually left. */
+  transition: width 0.25s linear;
+}
+
+.meet-timerfill.urgent {
+  background: linear-gradient(90deg, #c9506a, var(--danger));
+}
+
+.vote-card.dead {
+  opacity: 0.42;
+  filter: grayscale(0.85);
+  cursor: default;
+  position: relative;
+}
+
+.vote-card.dead img {
+  /* The X is drawn rather than added as an asset — two gradients, no request. */
+  background:
+    linear-gradient(45deg, transparent 46%, var(--danger) 46%, var(--danger) 54%, transparent 54%),
+    linear-gradient(-45deg, transparent 46%, var(--danger) 46%, var(--danger) 54%, transparent 54%);
+}
+
+.dead-tag {
+  margin-left: auto;
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  color: var(--danger);
+  border: 1px solid var(--danger-dim);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
