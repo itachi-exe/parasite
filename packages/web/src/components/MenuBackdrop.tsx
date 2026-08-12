@@ -15,6 +15,7 @@ import {
   tendrilPts,
   mix,
   darken,
+  lighten,
 } from '@/game/art/pen';
 
 /**
@@ -123,12 +124,13 @@ export default function MenuBackdrop() {
         pen.fill(ENV.wall, 0.55);
         pen.rect(x + 6, sy, 84, 3);
         if (r() < 0.42) {
-          const jar = pick(r, [ENV.spore, ENV.bio, ENV.frondLit] as const);
+          // Unlit glassware. These used to carry a glow halo each, which put a
+          // field of green dots across the whole back wall.
           const jx = x + range(r, 14, 70);
-          pen.fill(jar, 0.16);
-          pen.circle(jx, sy - 8, 9);
-          pen.fill(jar, 0.75);
-          pen.circle(jx, sy - 8, 4.2);
+          pen.fill(darken(ENV.wall, 0.25), 0.9);
+          pen.roundRect(jx - 3.5, sy - 12, 7, 11, 1.5);
+          pen.fill(lighten(ENV.wall, 0.1), 0.5);
+          pen.rect(jx - 2.5, sy - 11, 1.6, 8);
         }
       }
     }
@@ -236,12 +238,15 @@ export default function MenuBackdrop() {
     // behind it, so a green glow *behind* a green figure — the first attempt —
     // rendered it invisible. It needs the opposite: a dark plate to sit
     // against, and the glow pushed out to a halo around the silhouette.
-    pen.fill(0x030b0a, 0.72);
-    pen.ellipse(1180, 560, 250, 330);
-    bloom(pen, 1180, 520, 360, { color: ENV.spore, alpha: 0.13, layers: 9 });
-    pen.fill(0x02090a, 0.5);
-    pen.ellipse(1180, 600, 190, 280);
-    place(pen, 1180, 884, 10.4, true, () =>
+    pen.fill(0x030b0a, 0.66);
+    pen.ellipse(1215, 690, 165, 215);
+    pen.fill(0x02090a, 0.45);
+    pen.ellipse(1215, 720, 120, 165);
+    // 6.2x, not 10.4x. The art is authored to read at ~40px; at ten times that
+    // its eye and spore pods stop being features and become large flat circles
+    // strewn across the right third of the screen — which is precisely what they
+    // looked like. Smaller shows the whole creature and lets it read as one.
+    place(pen, 1215, 858, 6.2, true, () =>
       drawCharacter(pen, {
         pal: PARASITE_PAL,
         accessory: 'scanner',
@@ -250,13 +255,6 @@ export default function MenuBackdrop() {
         form: 'parasite',
       })
     );
-    // Spore motes drifting off it — a little life in an otherwise still frame.
-    for (let i = 0; i < 26; i++) {
-      const sx = 1180 + range(r, -260, 260);
-      const sy = range(r, 240, 860);
-      pen.fill(ENV.bio, range(r, 0.15, 0.5));
-      pen.circle(sx, sy, range(r, 1.5, 4));
-    }
 
     // ── Foreground foliage, framing the very bottom ─────────────────────────
     // Kept below the crew's feet and out to the corners on purpose: the first

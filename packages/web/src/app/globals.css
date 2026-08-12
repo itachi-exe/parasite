@@ -1021,6 +1021,10 @@ button.vote-card:hover:not(:disabled) {
   inset: 0;
   overflow: hidden;
   background: var(--bg-deep);
+  /* Same layer as .overlay. Without this the title screen sat *under* the game
+     shell's HUD panels (z-index 2) and the task list and action buttons showed
+     straight through it. */
+  z-index: 50;
 }
 
 /* The backdrop is a fixed 1600x900 painting. `cover` keeps its composition —
