@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { MIN_PLAYERS, MAX_PLAYERS, type RoomState, type SkinId } from '@parasite/shared';
 import { useDialog } from '@/hooks/useDialog';
+import MenuBackdrop from './MenuBackdrop';
 
 const SKIN_SRC = [
   '/sprites/human-0.png',
@@ -13,6 +14,21 @@ const SKIN_SRC = [
 
 const SKIN_NAME = ['Amber', 'Indigo', 'Rust', 'Slate'];
 
+type Sheet = null | 'join' | 'how';
+
+/**
+ * Title screen and lobby.
+ *
+ * Structured after the menu the owner supplied as a reference: full-bleed
+ * scene, status chip top-left, settings top-right, a stacked display logo over
+ * a single dominant primary action, quieter secondary actions beneath it, and a
+ * status card in the lower-right corner. Nothing here reproduces that game's
+ * art or wordmark — the layout grammar is the borrowed part, and it is borrowed
+ * because it is *good*: one obvious thing to press, everything else subordinate.
+ *
+ * PLAY opens the join sheet rather than joining immediately, which is what
+ * gives the title screen room to be a title screen instead of a form.
+ */
 export default function Lobby(props: {
   state: RoomState | null;
   connected: boolean;
@@ -44,10 +60,7 @@ export default function Lobby(props: {
   const [code, setCode] = useState('VIRELIA');
   const [skin, setSkin] = useState<SkinId>(0);
   const [joining, setJoining] = useState(false);
-
-  // No onClose: the lobby is the entry point, so there is nothing behind it to
-  // dismiss to.
-  const dialogRef = useDialog();
+  const [sheet, setSheet] = useState<Sheet>(null);
 
   const count = state?.players.length ?? 0;
   const canStart = count >= MIN_PLAYERS && count <= MAX_PLAYERS;
@@ -68,177 +81,322 @@ export default function Lobby(props: {
     }
   };
 
+  // ── Waiting room ──────────────────────────────────────────────────────────
+  // Once joined, the title screen has done its job and gets out of the way.
+  if (joined) {
+    return (
+      <div className="menu">
+        <MenuBackdrop />
+        <div className="menu-scrim" />
+        <div className="waitroom" role="region" aria-label="Lobby">
+          <h2 className="waitroom-title">VIRELIA · {code}</h2>
+
+          <div className="waitroom-head" role="status">
+            <strong>
+              {count} / {MAX_PLAYERS} scientists
+            </strong>
+            <span className={count >= MIN_PLAYERS ? 'pill ok' : 'pill'}>
+              {count >= MIN_PLAYERS ? 'READY' : `NEED ${MIN_PLAYERS - count} MORE`}
+            </span>
+          </div>
+
+          <ul className="crew-strip">
+            {state?.players.map((p) => (
+              <li key={p.seat} className="crew-chip">
+                <img src={SKIN_SRC[p.skin % 4]} alt="" />
+                <span>{p.name}</span>
+              </li>
+            ))}
+          </ul>
+
+          {isHost ? (
+            <button className="btn-play" disabled={!canStart} onClick={onStart}>
+              {canStart ? 'Begin the expedition' : `Need ${MIN_PLAYERS}+ players`}
+            </button>
+          ) : (
+            <div className="muted">Waiting for the lobby host to start…</div>
+          )}
+
+          <p className="mono-note">
+            Once the expedition starts, <strong>nobody else can join</strong> and nobody
+            can leave — enforced on the server, not just here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Title screen ──────────────────────────────────────────────────────────
   return (
-    <div className="overlay">
+    <div className="menu">
+      <MenuBackdrop />
+      <div className="menu-scrim" />
+
+      {/* Top-left: what the reference uses for account state. Ours carries the
+          only status a player can act on — whether the server is reachable. */}
+      <div className="menu-status" role="status">
+        <span className={`dot${connected ? ' live' : ''}`} aria-hidden="true" />
+        <span>{connected ? 'OUTPOST ONLINE' : 'CONNECTING…'}</span>
+      </div>
+
+      <button
+        className="menu-icon-btn"
+        aria-label="How to play"
+        aria-expanded={sheet === 'how'}
+        onClick={() => setSheet(sheet === 'how' ? null : 'how')}
+      >
+        ?
+      </button>
+
+      <div className="menu-stack">
+        {/* Stacked display logo. Three lines, mirroring the reference's
+            three-word lockup, with the game's name carrying the weight. */}
+        <h1 className="logo" aria-label="Host the Parasite">
+          <span className="logo-sm" aria-hidden="true">HOST</span>
+          <span className="logo-sm alt" aria-hidden="true">THE</span>
+          <span className="logo-lg" aria-hidden="true">PARASITE</span>
+        </h1>
+
+        <p className="tagline">
+          Virelia Research Outpost · one of you is not what they appear to be
+        </p>
+
+        <button
+          className="btn-play"
+          disabled={!connected}
+          onClick={() => setSheet('join')}
+        >
+          {connected ? 'Play' : 'Connecting…'}
+        </button>
+
+        <div className="menu-secondary">
+          <button className="btn-menu" onClick={() => setSheet('how')}>
+            How to play
+          </button>
+          {roleMode === 'inco' && (
+            <button className="btn-menu" onClick={onConnectWallet}>
+              {walletAddress
+                ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
+                : 'Connect wallet'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Lower-right card — the reference's "pet of the week" slot. The mode
+          banner is the most important thing a judge or player can read about
+          this build, so it gets the corner that already draws the eye. */}
+      <aside className={`mode-card${roleMode === 'inco' ? ' inco' : ''}`}>
+        <header>{roleMode === 'inco' ? 'INCO MODE' : 'SIMULATED MODE'}</header>
+        <div className="mode-body">
+          {roleMode === 'inco' ? (
+            <>
+              Roles and the Jump run on Base Sepolia. Your role is decrypted in your
+              browser — the server never sees it.
+            </>
+          ) : (
+            <>
+              No contract configured, so roles come from the game server and are{' '}
+              <strong>not encrypted</strong>. Fully playable; the confidentiality
+              guarantee is absent.
+            </>
+          )}
+        </div>
+      </aside>
+
+      {sheet === 'join' && (
+        <JoinSheet
+          name={name}
+          code={code}
+          skin={skin}
+          joining={joining}
+          connected={connected}
+          onName={setName}
+          onCode={setCode}
+          onSkin={setSkin}
+          onClose={() => setSheet(null)}
+          onSubmit={submitJoin}
+        />
+      )}
+
+      {sheet === 'how' && (
+        <HowSheet
+          roleMode={roleMode}
+          contractAddress={contractAddress}
+          onClose={() => setSheet(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The join form, unchanged in substance — only its container moved. */
+function JoinSheet(props: {
+  name: string;
+  code: string;
+  skin: SkinId;
+  joining: boolean;
+  connected: boolean;
+  onName: (v: string) => void;
+  onCode: (v: string) => void;
+  onSkin: (v: SkinId) => void;
+  onClose: () => void;
+  onSubmit: () => void | Promise<void>;
+}) {
+  const dialogRef = useDialog({ onClose: props.onClose });
+  const submit = () => void props.onSubmit();
+
+  return (
+    <div className="overlay" onClick={props.onClose}>
       <div
-        className="modal"
+        className="modal sheet"
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="lobby-heading"
+        aria-labelledby="join-heading"
         tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="lobby-heading">PARASITE</h2>
-        <p>
-          Virelia Research Outpost · one of you is not what they appear to be.
-          <br />
-          Hidden roles are encrypted with Inco Lightning FHE — nobody, not even the
-          game server, can read them.
-        </p>
+        <h2 id="join-heading">Join the expedition</h2>
 
-        {!joined ? (
-          <>
-            <div className="field">
-              <label htmlFor="lobby-name">Name</label>
-              <input
-                id="lobby-name"
-                value={name}
-                maxLength={16}
-                placeholder="Dr. Okafor"
-                autoComplete="off"
-                aria-describedby="lobby-name-help"
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void submitJoin();
-                }}
-              />
-              {/* The server assigns this fallback silently; saying so up front
-                  beats a player wondering who "Scientist 3" is. */}
-              <span className="field-help" id="lobby-name-help">
-                Up to 16 characters. Leave it blank and the outpost will name you.
-              </span>
-            </div>
+        <div className="field">
+          <label htmlFor="lobby-name">Name</label>
+          <input
+            id="lobby-name"
+            value={props.name}
+            maxLength={16}
+            placeholder="Dr. Okafor"
+            autoComplete="off"
+            aria-describedby="lobby-name-help"
+            onChange={(e) => props.onName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submit();
+            }}
+          />
+          {/* The server assigns this fallback silently; saying so up front
+              beats a player wondering who "Scientist 3" is. */}
+          <span className="field-help" id="lobby-name-help">
+            Up to 16 characters. Leave it blank and the outpost will name you.
+          </span>
+        </div>
 
-            <div className="field">
-              <label htmlFor="lobby-code">Outpost code</label>
-              <input
-                id="lobby-code"
-                value={code}
-                maxLength={12}
-                autoComplete="off"
-                autoCapitalize="characters"
-                spellCheck={false}
-                aria-describedby="lobby-code-help"
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void submitJoin();
-                }}
-              />
-              <span className="field-help" id="lobby-code-help">
-                Everyone joining the same game must type the same code.
-              </span>
-            </div>
+        <div className="field">
+          <label htmlFor="lobby-code">Outpost code</label>
+          <input
+            id="lobby-code"
+            value={props.code}
+            maxLength={12}
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            aria-describedby="lobby-code-help"
+            onChange={(e) => props.onCode(e.target.value.toUpperCase())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submit();
+            }}
+          />
+          <span className="field-help" id="lobby-code-help">
+            Everyone joining the same game must type the same code.
+          </span>
+        </div>
 
-            {/*
-              A radiogroup rather than four buttons: a button conveys "activate
-              me", not "one of these is chosen". With role=radio + aria-checked a
-              screen reader announces "Amber, 1 of 4, selected", which is the
-              actual state of this control.
-            */}
-            <div className="field">
-              <span className="field-label" id="skin-label">
-                Choose your scientist
-              </span>
-              <div className="skins" role="radiogroup" aria-labelledby="skin-label">
-                {SKIN_SRC.map((src, i) => (
-                  <button
-                    key={src}
-                    type="button"
-                    role="radio"
-                    aria-checked={skin === i}
-                    className={`skin${skin === i ? ' sel' : ''}`}
-                    onClick={() => setSkin(i as SkinId)}
-                    aria-label={SKIN_NAME[i] ?? `Scientist ${i + 1}`}
-                  >
-                    <img src={src} alt="" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="row">
+        {/*
+          A radiogroup rather than four buttons: a button conveys "activate
+          me", not "one of these is chosen". With role=radio + aria-checked a
+          screen reader announces "Amber, 1 of 4, selected", which is the
+          actual state of this control.
+        */}
+        <div className="field">
+          <span className="field-label" id="skin-label">
+            Choose your scientist
+          </span>
+          <div className="skins" role="radiogroup" aria-labelledby="skin-label">
+            {SKIN_SRC.map((src, i) => (
               <button
-                className="btn btn-lg"
-                disabled={!connected || joining}
-                aria-busy={joining}
-                onClick={() => void submitJoin()}
+                key={src}
+                type="button"
+                role="radio"
+                aria-checked={props.skin === i}
+                className={`skin${props.skin === i ? ' sel' : ''}`}
+                onClick={() => props.onSkin(i as SkinId)}
+                aria-label={SKIN_NAME[i] ?? `Scientist ${i + 1}`}
               >
-                {joining ? 'Joining…' : connected ? 'Join outpost' : 'Connecting…'}
+                <img src={src} alt="" />
               </button>
-              {roleMode === 'inco' && (
-                <button
-                  className="btn"
-                  onClick={onConnectWallet}
-                  aria-label={
-                    walletAddress
-                      ? `Wallet connected: ${walletAddress}. Choose a different wallet.`
-                      : 'Connect a wallet to decrypt your role'
-                  }
-                >
-                  {walletAddress
-                    ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
-                    : 'Connect wallet'}
-                </button>
-              )}
-            </div>
+            ))}
+          </div>
+        </div>
 
-            {!connected && (
-              <div className="mono-note" role="status">
-                Cannot reach the game server. Start it with <code>npm run dev:server</code>{' '}
-                (or <code>npm run dev</code> to run both).
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            {/*
-              Polite live region: players trickle in while you are watching the
-              lobby, and the count changing is the one thing you are waiting for.
-            */}
-            <div
-              className="row"
-              style={{ justifyContent: 'space-between', marginTop: 16 }}
-              role="status"
-            >
-              <strong style={{ letterSpacing: '0.1em' }}>
-                {count} / {MAX_PLAYERS} scientists
-              </strong>
-              <span className={count >= MIN_PLAYERS ? 'pill ok' : 'pill'}>
-                {count >= MIN_PLAYERS ? 'READY' : `NEED ${MIN_PLAYERS - count} MORE`}
-              </span>
-            </div>
+        <button
+          className="btn-play"
+          disabled={!props.connected || props.joining}
+          aria-busy={props.joining}
+          onClick={submit}
+        >
+          {props.joining ? 'Joining…' : 'Join outpost'}
+        </button>
 
-            <ul className="vote-grid" style={{ marginTop: 12, listStyle: 'none', padding: 0 }}>
-              {state?.players.map((p) => (
-                <li key={p.seat} className="vote-card">
-                  <img src={SKIN_SRC[p.skin % 4]} alt="" />
-                  <span>{p.name}</span>
-                </li>
-              ))}
-            </ul>
-
-            {isHost ? (
-              <button className="btn btn-lg" disabled={!canStart} onClick={onStart}>
-                {canStart ? 'Begin the expedition' : `Need ${MIN_PLAYERS}+ players`}
-              </button>
-            ) : (
-              <div className="muted">Waiting for the lobby host to start…</div>
-            )}
-
-            <div className="mono-note">
-              Once the expedition starts, <strong>nobody else can join</strong> and nobody
-              can leave — enforced on the server, not just here. Open this page in{' '}
-              {MIN_PLAYERS} browser tabs to test solo.
-            </div>
-          </>
+        {!props.connected && (
+          <div className="mono-note" role="status">
+            Cannot reach the game server. Start it with <code>npm run dev:server</code>{' '}
+            (or <code>npm run dev</code> to run both).
+          </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Rules, and what Inco mode actually changes. */
+function HowSheet(props: {
+  roleMode: 'inco' | 'simulated';
+  contractAddress: string | null;
+  onClose: () => void;
+}) {
+  const dialogRef = useDialog({ onClose: props.onClose });
+
+  return (
+    <div className="overlay" onClick={props.onClose}>
+      <div
+        className="modal sheet"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="how-heading"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="how-heading">How to play</h2>
+
+        <ul className="how-list">
+          <li>
+            <strong>Move</strong> with WASD or the arrow keys. Everyone starts as a
+            scientist; one of you is the Parasite.
+          </li>
+          <li>
+            <strong>Scientists</strong> finish tasks at the marked stations. Complete
+            them all and the outpost survives.
+          </li>
+          <li>
+            <strong>The Parasite</strong> purges scientists, and can Jump into another
+            body to keep moving through the crew unnoticed.
+          </li>
+          <li>
+            <strong>Anyone</strong> can call an emergency meeting or report a body. Then
+            you argue, and you vote.
+          </li>
+          <li>
+            The Jump button is shown to <em>everyone</em>, on purpose — a button only the
+            Parasite could see would give the role away over a shoulder.
+          </li>
+        </ul>
 
         <div className="mono-note">
-          {roleMode === 'inco' ? (
+          {props.roleMode === 'inco' ? (
             <>
               <span className="pill ok">INCO MODE</span> Roles and the Jump run on Base
-              Sepolia at <code>{contractAddress}</code>. Your role is decrypted in your
-              browser with your wallet — the server never sees it.
+              Sepolia at <code>{props.contractAddress}</code>. Your role is decrypted in
+              your browser with your wallet — the server never sees it.
             </>
           ) : (
             <>
@@ -250,6 +408,10 @@ export default function Lobby(props: {
             </>
           )}
         </div>
+
+        <button className="btn-menu" onClick={props.onClose}>
+          Close
+        </button>
       </div>
     </div>
   );

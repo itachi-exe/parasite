@@ -994,3 +994,368 @@ button.vote-card:hover:not(:disabled) {
     flex: 1 1 100%;
   }
 }
+
+/* ── Title screen ──────────────────────────────────────────────────────────── */
+
+/*
+ * Full-bleed menu, laid out after the reference the owner supplied: scene
+ * behind everything, status chip and icon button pinned to the top corners, a
+ * centred logo/CTA column, and a status card lower-right. The centre column is
+ * the only thing with a hard vertical rhythm; the corners are absolutely
+ * positioned so they never push it around.
+ */
+.menu {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg-deep);
+}
+
+/* The backdrop is a fixed 1600x900 painting. `cover` keeps its composition —
+   crew low-left, Parasite right — intact at any aspect ratio instead of
+   letterboxing the scene the layout was composed against. */
+.menu-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Readability plate. The logo and buttons sit on a painted scene, and type on
+   an unmanaged photograph is the classic way a menu ends up illegible on
+   exactly one machine. */
+.menu-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 46% 62% at 50% 46%, rgba(4, 8, 12, 0.82), rgba(4, 8, 12, 0.12) 70%),
+    linear-gradient(180deg, rgba(4, 8, 12, 0.62) 0%, rgba(4, 8, 12, 0) 26%);
+  pointer-events: none;
+}
+
+.menu-status {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  left: max(18px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: rgba(10, 14, 19, 0.72);
+  border: 1px solid var(--edge);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+}
+
+.menu-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.menu-status .dot.live {
+  background: var(--glow);
+  box-shadow: 0 0 10px var(--glow);
+}
+
+.menu-icon-btn {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+  width: var(--hit);
+  height: var(--hit);
+  border-radius: 50%;
+  background: rgba(10, 14, 19, 0.72);
+  border: 1px solid var(--edge);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.menu-icon-btn:hover {
+  border-color: var(--glow);
+  background: rgba(20, 32, 40, 0.9);
+}
+
+.menu-stack {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 20px;
+  text-align: center;
+}
+
+/* ── Logo ──────────────────────────────────────────────────────────────────── */
+
+/*
+ * A stacked three-line lockup. The reference's is hand-lettered art; this is
+ * type, because type is what code can actually do well — the weight, the tight
+ * tracking and the heavy outline do the work a drawn logo would.
+ */
+.logo {
+  margin: 0 0 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.84;
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.logo-sm {
+  font-size: clamp(26px, 5.2vw, 58px);
+  letter-spacing: 0.3em;
+  /* Indent by the tracking so the optical centre matches the big line. */
+  text-indent: 0.3em;
+  color: var(--text);
+  text-shadow: 0 3px 0 rgba(3, 8, 11, 0.9), 0 0 26px rgba(74, 217, 240, 0.28);
+}
+
+.logo-sm.alt {
+  color: var(--glow);
+}
+
+.logo-lg {
+  font-size: clamp(52px, 13vw, 152px);
+  letter-spacing: 0.04em;
+  text-indent: 0.04em;
+  color: var(--text);
+  /* Stacked hard shadows instead of a stroke: -webkit-text-stroke thins the
+     glyph from the inside, which eats a heavy weight's whole point. */
+  text-shadow:
+    0 6px 0 rgba(3, 8, 11, 0.95),
+    0 0 44px rgba(74, 217, 240, 0.4),
+    0 0 90px rgba(124, 255, 79, 0.16);
+}
+
+.tagline {
+  margin: 0 0 26px;
+  font-size: clamp(11px, 1.5vw, 14px);
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+/* ── Primary / secondary actions ───────────────────────────────────────────── */
+
+/*
+ * One dominant action, everything else visibly quieter — the single most
+ * useful thing about the reference's menu. Press deformation rather than a
+ * colour swap: it reads as physical, and it survives being looked at on a
+ * phone where hover does not exist.
+ */
+.btn-play {
+  min-width: min(340px, 78vw);
+  min-height: 62px;
+  padding: 16px 44px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffd25e 0%, #f2a52b 100%);
+  color: #241703;
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: clamp(20px, 3vw, 28px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: 0 6px 0 #a9670f, 0 12px 26px rgba(0, 0, 0, 0.45);
+  transition: transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
+}
+
+.btn-play:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.btn-play:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 #a9670f, 0 6px 14px rgba(0, 0, 0, 0.4);
+}
+
+.btn-play:disabled {
+  background: linear-gradient(180deg, #6c737a 0%, #4d545a 100%);
+  color: #d5dde2;
+  box-shadow: 0 6px 0 #2e3439, 0 12px 26px rgba(0, 0, 0, 0.4);
+}
+
+.menu-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.btn-menu {
+  min-height: var(--hit);
+  padding: 12px 26px;
+  border-radius: 11px;
+  border: 1px solid var(--edge);
+  background: rgba(18, 26, 33, 0.86);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 0 rgba(3, 8, 11, 0.8);
+  transition: transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.btn-menu:hover {
+  border-color: var(--glow);
+}
+
+.btn-menu:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(3, 8, 11, 0.8);
+}
+
+/* ── Mode card ─────────────────────────────────────────────────────────────── */
+
+.mode-card {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: min(310px, 68vw);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--danger-dim);
+  background: rgba(10, 14, 19, 0.9);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.mode-card.inco {
+  border-color: var(--edge);
+}
+
+.mode-card > header {
+  padding: 8px 13px;
+  background: var(--danger-dim);
+  color: #1b0208;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.mode-card.inco > header {
+  background: var(--glow);
+  color: #04171d;
+}
+
+.mode-body {
+  padding: 11px 13px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+/* ── Waiting room ──────────────────────────────────────────────────────────── */
+
+.waitroom {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 24px;
+  text-align: center;
+}
+
+.waitroom-title {
+  margin: 0;
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: clamp(26px, 5vw, 44px);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text);
+  text-shadow: 0 4px 0 rgba(3, 8, 11, 0.9), 0 0 34px rgba(74, 217, 240, 0.3);
+}
+
+.waitroom-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  letter-spacing: 0.1em;
+}
+
+.crew-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+  max-width: 720px;
+}
+
+.crew-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px 7px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: rgba(18, 26, 33, 0.88);
+  font-size: 12px;
+}
+
+.crew-chip img {
+  width: 26px;
+  height: 30px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+/* ── Sheets ────────────────────────────────────────────────────────────────── */
+
+/* A sheet is the existing .modal, narrowed and scroll-safe on short screens. */
+.sheet {
+  max-width: 470px;
+  max-height: min(86vh, 760px);
+  overflow-y: auto;
+}
+
+.how-list {
+  margin: 6px 0 4px;
+  padding-left: 20px;
+  line-height: 1.65;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.how-list li + li {
+  margin-top: 9px;
+}
+
+.how-list strong {
+  color: var(--text);
+}
+
+/* Short viewports: the logo is the first thing that should give up space. */
+@media (max-height: 620px) {
+  .logo-lg {
+    font-size: clamp(40px, 9vw, 72px);
+  }
+  .logo-sm {
+    font-size: clamp(18px, 3.4vw, 28px);
+  }
+  .tagline {
+    margin-bottom: 16px;
+  }
+}
