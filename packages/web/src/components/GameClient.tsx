@@ -241,17 +241,6 @@ export default function GameClient() {
         </div>
 
         <RoleBadge role={role} />
-
-        <button
-          className="btn btn-danger"
-          disabled={
-            phase !== 'playing' || !me?.alive || (me?.emergencyMeetingsLeft ?? 0) <= 0
-          }
-          aria-label={`Call an emergency meeting. ${me?.emergencyMeetingsLeft ?? 0} remaining.`}
-          onClick={() => sock.callMeeting()}
-        >
-          Emergency ({me?.emergencyMeetingsLeft ?? 0})
-        </button>
       </header>
 
       <TaskList
@@ -284,7 +273,12 @@ export default function GameClient() {
           {nearestBody !== null ? ' There is a body here.' : ''}
         </p>
         {showMap && state && (
-          <MiniMap players={state.players} mySeat={mySeat} bodies={state.bodies} />
+          <MiniMap
+            players={state.players}
+            mySeat={mySeat}
+            bodies={state.bodies}
+            room={myArea}
+          />
         )}
       </div>
 
@@ -298,7 +292,15 @@ export default function GameClient() {
           aria-pressed={showMap}
           onClick={() => setShowMap((v) => !v)}
         >
-          Map
+          {/*
+            Icon + label + keybind tab, per DESIGN.md §3. The visible label is
+            aria-hidden and each button carries its own aria-label, because the
+            glyph and the key tab are decoration to a screen reader — it needs
+            the sentence, not "🗺 MAP TAB".
+          */}
+          <span className="ico" aria-hidden="true">🗺</span>
+          <span aria-hidden="true">MAP</span>
+          <span className="key" aria-hidden="true">TAB</span>
         </button>
 
         <button
@@ -311,7 +313,9 @@ export default function GameClient() {
           }
           onClick={() => nearestTask && setOpenTask(nearestTask)}
         >
-          Use{nearestTask ? ` · ${TASK_DEFS.find((t) => t.id === nearestTask)!.name}` : ''}
+          <span className="ico" aria-hidden="true">✦</span>
+          <span aria-hidden="true">USE</span>
+          <span className="key" aria-hidden="true">E</span>
         </button>
 
         <button
@@ -322,7 +326,24 @@ export default function GameClient() {
           }
           onClick={() => nearestBody !== null && sock.reportBody(nearestBody)}
         >
-          Report
+          <span className="ico" aria-hidden="true">⚑</span>
+          <span aria-hidden="true">REPORT</span>
+          <span className="key" aria-hidden="true">R</span>
+        </button>
+
+        {/* Moved down out of the top bar: calling a meeting is an action, and it
+            sat in the header only because the header used to span the screen. */}
+        <button
+          className="btn btn-danger"
+          disabled={
+            phase !== 'playing' || !me?.alive || (me?.emergencyMeetingsLeft ?? 0) <= 0
+          }
+          aria-label={`Call an emergency meeting. ${me?.emergencyMeetingsLeft ?? 0} remaining.`}
+          onClick={() => sock.callMeeting()}
+        >
+          <span className="ico" aria-hidden="true">◈</span>
+          <span aria-hidden="true">MEET</span>
+          <span className="key" aria-hidden="true">{me?.emergencyMeetingsLeft ?? 0} LEFT</span>
         </button>
 
         {/*
@@ -342,9 +363,16 @@ export default function GameClient() {
             nearestPlayer.d > JUMP_RANGE
           }
           aria-busy={jumping}
+          aria-label={
+            nearestPlayer && nearestPlayer.d <= JUMP_RANGE
+              ? `Jump into ${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name ?? 'the nearest scientist'}`
+              : 'Jump — nobody in range'
+          }
           onClick={doJump}
         >
-          {jumping ? 'Jumping…' : 'Jump'}
+          <span className="ico" aria-hidden="true">⇌</span>
+          <span aria-hidden="true">{jumping ? '…' : 'JUMP'}</span>
+          <span className="key" aria-hidden="true">F</span>
         </button>
 
         {isParasite && (
@@ -363,14 +391,20 @@ export default function GameClient() {
             }
             onClick={() => nearestPlayer && sock.purge(nearestPlayer.seat)}
           >
-            Purge
+            <span className="ico" aria-hidden="true">☣</span>
+            <span aria-hidden="true">PURGE</span>
+            <span className="key" aria-hidden="true">Q</span>
           </button>
         )}
 
-        <span className="hint">
-          WASD / arrows to move
+        {/*
+          The movement hint is gone — every control now carries its own key on a
+          tab, so the only thing left worth saying is who is actually in reach,
+          and that belongs next to the buttons that act on them.
+        */}
+        <span className="hint" role="status">
           {nearestPlayer && nearestPlayer.d <= JUMP_RANGE
-            ? ` · ${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name} is in range`
+            ? `${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name} is in range`
             : ''}
         </span>
       </footer>

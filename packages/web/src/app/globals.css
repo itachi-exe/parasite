@@ -1359,3 +1359,262 @@ button.vote-card:hover:not(:disabled) {
     margin-bottom: 16px;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   HUD v2 — the corner ring
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Everything below overrides the original three-column shell. See DESIGN.md §1:
+   the reference puts UI only around the edges and gives the whole middle to the
+   world, where our first layout spent ~40% of a 1280px screen on two permanent
+   rails and left the game playing in a slot between them.
+
+   Deliberately written as an override block rather than by editing the original
+   rules: the panels keep their existing markup, roles, labels and live regions
+   (a real accessibility pass went into those), and only their placement and
+   surface change. Nothing here touches a single component's DOM.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.shell {
+  display: block;
+  position: relative;
+  padding: 0;
+  gap: 0;
+}
+
+/* The world, full bleed. Rounded corners and the border go away — it is the
+   page now, not a widget on it. */
+.shell > .stage {
+  position: absolute;
+  inset: 0;
+  border: none;
+  border-radius: 0;
+  z-index: 0;
+}
+
+/* Shared surface for everything floating over the world. */
+.shell > .topbar,
+.shell > .sidebar-left,
+.shell > .sidebar-right,
+.shell > .actionbar {
+  position: absolute;
+  z-index: 2;
+  background: rgba(15, 21, 27, 0.82);
+  backdrop-filter: blur(7px);
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Top bar: brand + progress only, hugging the top-left ─────────────────── */
+.shell > .topbar {
+  top: max(10px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  height: auto;
+  min-height: 0;
+  padding: 7px 14px;
+  gap: 16px;
+  max-width: min(520px, calc(100vw - 220px));
+  flex-wrap: nowrap;
+}
+
+/* The sub-line wrapped to three stacked words at this width, which is what
+   pushed the bar down into the task panel below it. */
+.shell > .topbar .brand,
+.shell > .topbar .brand-title,
+.shell > .topbar .brand-sub {
+  white-space: nowrap;
+}
+
+/* The spacer only existed to push things apart across a full-width bar. */
+.shell > .topbar .topbar-spacer {
+  display: none;
+}
+
+.shell > .topbar .brand-title {
+  font-size: 15px;
+}
+
+.shell > .topbar .brand-sub {
+  font-size: 8.5px;
+}
+
+.shell > .topbar .progress-wrap {
+  min-width: 140px;
+}
+
+/* ── Task list: top-left, under the bar, height-capped ────────────────────── */
+.shell > .sidebar-left {
+  top: calc(max(10px, env(safe-area-inset-top)) + 84px);
+  left: max(10px, env(safe-area-inset-left));
+  width: 216px;
+  max-height: min(46vh, 380px);
+}
+
+/* ── Crew list: top-right, clear of the minimap ───────────────────────────── */
+.shell > .sidebar-right {
+  top: calc(max(10px, env(safe-area-inset-top)) + 150px);
+  right: max(10px, env(safe-area-inset-right));
+  width: 210px;
+  max-height: min(42vh, 340px);
+}
+
+/* ── Action bar: bottom, no plate of its own ──────────────────────────────── */
+/* The buttons are the UI now; a bar behind them is a second surface doing no
+   work. Only the buttons keep a background. */
+.shell > .actionbar {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(12px, env(safe-area-inset-bottom));
+  background: none;
+  backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+  min-height: 0;
+  padding: 0;
+  gap: 14px;
+  justify-content: center;
+}
+
+/* ── Circular ability buttons ─────────────────────────────────────────────── */
+/*
+ * DESIGN.md §2/§3: circles are the reference's signature shape, and each one
+ * carries its own keybind on a tab beneath it so the controls teach themselves
+ * — which is what lets the separate "WASD / arrows to move" hint go away.
+ */
+.shell > .actionbar .btn {
+  width: 66px;
+  height: 66px;
+  min-height: 66px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(15, 21, 27, 0.9);
+  border: 2px solid var(--edge);
+  backdrop-filter: blur(7px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  position: relative;
+  overflow: visible;
+}
+
+.shell > .actionbar .btn .ico {
+  font-size: 21px;
+  line-height: 1;
+}
+
+/* The keybind tab. Absolutely positioned so it cannot change the circle's
+   box, which is what keeps the row's rhythm even. */
+.shell > .actionbar .btn .key {
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--edge-soft);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.shell > .actionbar .btn:hover:not(:disabled) {
+  border-color: var(--glow);
+  background: rgba(28, 53, 64, 0.95);
+}
+
+.shell > .actionbar .btn:active:not(:disabled) {
+  transform: translateY(3px);
+}
+
+.shell > .actionbar .btn-danger {
+  border-color: var(--danger-dim);
+}
+
+.shell > .actionbar .btn-parasite {
+  border-color: #4f9c2f;
+}
+
+/* The old inline hint is redundant once every control is self-labelling. */
+.shell > .actionbar .hint {
+  display: none;
+}
+
+/* ── Circular minimap, top-right ──────────────────────────────────────────── */
+.minimap {
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  bottom: auto;
+  width: 132px;
+  height: 132px;
+  padding: 0;
+  border-radius: 50%;
+  border: 3px solid var(--edge);
+  background: rgba(10, 14, 19, 0.9);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+  /* Not `hidden`: the room caption below is a ::after positioned at top:100%,
+     and clipping to the dial swallowed it entirely. The canvas is sized to fit
+     inside the circle instead, so there is nothing to clip. */
+  overflow: visible;
+  display: grid;
+  place-items: center;
+  z-index: 3;
+}
+
+/* The canvas is authored at a fixed 168px wide, which overflowed the dial and
+   showed as a bright clipped bar. Fit it instead of cropping it. */
+.minimap canvas {
+  max-width: 84%;
+  max-height: 84%;
+  width: auto;
+  height: auto;
+  border-radius: 6px;
+}
+
+/* Room name under the dial, as in the reference. */
+.minimap::after {
+  content: attr(data-room);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 5px;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+  text-shadow: 0 1px 3px #000;
+  white-space: nowrap;
+}
+
+/* ── Narrow screens ───────────────────────────────────────────────────────── */
+/* The ring still holds; the panels just shrink and the crew list steps aside,
+   since on a phone the roster matters less than seeing the room. */
+@media (max-width: 880px) {
+  .shell > .topbar {
+    max-width: calc(100vw - 170px);
+  }
+  .shell > .sidebar-left {
+    width: 172px;
+    max-height: 34vh;
+  }
+  .shell > .sidebar-right {
+    display: none;
+  }
+  .minimap {
+    width: 104px;
+    height: 104px;
+  }
+  .shell > .actionbar .btn {
+    width: 58px;
+    height: 58px;
+    min-height: 58px;
+  }
+}

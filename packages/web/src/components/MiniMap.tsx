@@ -14,6 +14,8 @@ export default function MiniMap(props: {
   players: PublicPlayer[];
   mySeat: Seat | null;
   bodies: { seat: Seat; x: number; y: number }[];
+  /** Current area name, captioned under the dial (DESIGN.md §4). */
+  room?: string | null;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const data = useRef(props);
@@ -67,7 +69,7 @@ export default function MiniMap(props: {
   }, []);
 
   return (
-    <div className="minimap">
+    <div className="minimap" data-room={(props.room ?? 'VIRELIA').toUpperCase()}>
       {/*
         The positional information here is already spoken by the stage's
         sr-only status line, so the canvas itself is hidden rather than
