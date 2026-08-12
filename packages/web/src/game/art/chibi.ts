@@ -25,6 +25,10 @@ import {
   eggPts,
   rng,
   range,
+  softShadow,
+  mix,
+  warm,
+  cool,
 } from './pen';
 import {
   type CharPalette,
@@ -59,10 +63,54 @@ const LEG_TOP = 46;
 /** Stride amplitude, in pixels of foot travel from neutral. */
 const STRIDE = 4.5;
 
-/** Passing pose rides higher than the contacts — real squash and stretch. */
+/**
+ * Passing pose rides higher than the contacts — real squash and stretch.
+ *
+ * Deepened from -2 to -2.6 and paired with `squash` below. Two pixels of rise on
+ * a 76px cell is most of the difference between a character who walks and one who
+ * slides, and it was under-reading at play scale.
+ */
 function lift(step: Step): number {
-  return step === 0 ? -2 : 0;
+  return step === 0 ? -2.6 : 0;
 }
+
+/**
+ * Horizontal squash to go with the vertical lift.
+ *
+ * A body that rises without narrowing has changed size, not shape. The contacts
+ * are the compressed poses (weight landing, so wider and shorter) and the passing
+ * pose is the extended one. Returned as a multiplier on half-widths.
+ */
+function squash(step: Step): number {
+  return step === 0 ? 0.975 : 1.02;
+}
+
+/**
+ * The world's light direction, as a sign on x.
+ *
+ * Top-left, matching the map's walls and prop shadows (see `drawWall` in
+ * mapArt.ts). Every lit face and every core shadow in this file derives from
+ * this rather than being decided per shape, which is what stops one limb being
+ * lit from the left and its neighbour from the right.
+ */
+const LIT = -1;
+
+/**
+ * A lit and a shaded version of a surface colour.
+ *
+ * Lit faces move toward the warm work-lamp colour rather than toward white, and
+ * shaded faces toward the jungle's cool bounce rather than toward black. Lerping
+ * to white and black is what made the first pass of these characters read as grey
+ * plastic: it desaturates on both ends, so the mid-tone was the only colour left
+ * with any life in it.
+ */
+function litFace(c: number, t = 0.16): number {
+  return warm(c, t);
+}
+function shadeFace(c: number, t = 0.24): number {
+  return cool(c, t);
+}
+
 
 // ── Shared bits ──────────────────────────────────────────────────────────────
 
@@ -86,10 +134,29 @@ function eye(pen: Pen, pal: CharPalette, x: number, y: number, s = 1): void {
   pen.circle(x - 0.7 * s, y - 1 * s, 0.85 * s);
 }
 
-/** Thin dark keyline. Vector characters need it to hold up over a dark floor. */
-function key(pen: Pen, pal: CharPalette, a = 0.5): void {
-  pen.line(1.1, pal.outline, a);
+/**
+ * The keyline. Vector characters need it to hold up over a dark floor.
+ *
+ * Both the weight and the colour changed in the GGD readability pass. It was
+ * 1.1px of near-black at 0.35–0.55 alpha, which measured as "present" and read as
+ * "absent": against the near-black jungle soil a black outline is the same value
+ * as the background, so it separated nothing at all — the one place the character
+ * most needed an edge was the one place the edge disappeared.
+ *
+ * Now 1.5px at 0.72–0.9 of a very dark *teal* (see OUTLINE in palette.ts), which
+ * stays darker than the coat but lighter than the soil, so it works as a boundary
+ * in both directions. This is the single biggest readability win in the pass and
+ * the cheapest.
+ */
+function key(pen: Pen, pal: CharPalette, a = 0.85): void {
+  pen.line(1.5, pal.outline, a);
 }
+
+/** A lighter inner keyline, for seams and panels *inside* the silhouette. */
+function seam(pen: Pen, pal: CharPalette, a = 0.4): void {
+  pen.line(1, pal.outline, a);
+}
+
 
 /**
  * One filled, keylined capsule, returning the point it ended at so the next one
@@ -118,7 +185,7 @@ function seg(
   const pts = capsulePts(x, y, angle, len, w0, w1);
   pen.fill(color);
   pen.poly(pts);
-  key(pen, pal, 0.5);
+  key(pen, pal, 0.72);
   pen.strokePoly(pts, true);
   return [x + Math.cos(angle) * len, y + Math.sin(angle) * len];
 }
@@ -155,13 +222,26 @@ function crackle(pen: Pen, facing: Facing, ly: number): void {
 function legVertical(pen: Pen, pal: CharPalette, x: number, off: number): void {
   const top = LEG_TOP;
   const bot = FEET + off;
+  // Bounce light behind the leg before it is filled. Near-black trousers over a
+  // dark floor have no edge otherwise, and a dark keyline around a dark shape on
+  // a dark floor separates nothing — same reasoning as `seg`'s halo.
+  pen.fill(pal.rim, 0.13);
+  pen.roundRect(x - 1, top, 10, bot - top - 1.5, 3.6);
   pen.fill(pal.pants);
   pen.roundRect(x, top, 8, bot - top - 2.5, 3);
-  key(pen, pal, 0.35);
+  pen.fill(mix(pal.pants, pal.rim, 0.14));
+  pen.roundRect(x + 0.6, top + 1, 2.4, bot - top - 6, 1.6);
+  key(pen, pal, 0.75);
   pen.strokeRoundRect(x, top, 8, bot - top - 2.5, 3);
   pen.fill(pal.shoe);
   pen.roundRect(x - 0.7, bot - 4.5, 9.4, 5, { tl: 1.4, tr: 1.4, bl: 2.6, br: 2.6 });
+  // The shoe used to be drawn after the stroke with no outline of its own, so the
+  // foot — the part that touches the floor and sells the contact — was the one
+  // piece with no edge at all.
+  key(pen, pal, 0.7);
+  pen.strokeRoundRect(x - 0.7, bot - 4.5, 9.4, 5, { tl: 1.4, tr: 1.4, bl: 2.6, br: 2.6 });
 }
+
 
 /** `away` inverts the step so a forward stride reads correctly from behind. */
 function legsVertical(pen: Pen, pal: CharPalette, step: Step, away: boolean): void {
@@ -187,42 +267,67 @@ function legsSide(pen: Pen, pal: CharPalette, step: Step): void {
 }
 // ── Torso ────────────────────────────────────────────────────────────────────
 
-/** Open lab coat over a dark undershirt, with the pack straps on the chest. */
+/**
+ * Open lab coat over the crew-coloured undershirt, with the pack straps on the
+ * chest.
+ *
+ * The shirt V is the primary identity read from the front: 16 units wide at the
+ * dead centre of the silhouette, right under the face the eye goes to first.
+ */
 function torsoFront(pen: Pen, pal: CharPalette, ly: number, step: Step): void {
   const y = TORSO_Y + ly;
+  const q = squash(step);
   pen.fill(pal.skinShade);
   pen.roundRect(CX - 4, y - 3, 8, 7, 2);
 
-  pen.fill(pal.shirt);
-  pen.roundRect(CX - 8, y, 16, TORSO_H, { tl: 5, tr: 5, bl: 4, br: 4 });
+  // Shirt, in the seat colour, shaded down its right side away from the light.
+  pen.fill(pal.crew);
+  pen.roundRect(CX - 8 * q, y, 16 * q, TORSO_H, { tl: 5, tr: 5, bl: 4, br: 4 });
+  pen.fill(pal.crewShade, 0.75);
+  pen.roundRect(CX + 2.6 * q, y + 1, 5 * q, TORSO_H - 2, { tl: 3, tr: 4, bl: 3, br: 3 });
+  seam(pen, pal, 0.45);
+  pen.strokeRoundRect(CX - 8 * q, y, 16 * q, TORSO_H, { tl: 5, tr: 5, bl: 4, br: 4 });
 
   for (const dir of [-1, 1]) {
     const x = dir < 0 ? 15 : 34;
-    pen.fill(pal.coat);
-    pen.roundRect(x, y, 15, TORSO_H, dir < 0 ? { tl: 7, tr: 2, bl: 5, br: 4 } : { tl: 2, tr: 7, bl: 4, br: 5 });
+    const r = dir < 0 ? { tl: 7, tr: 2, bl: 5, br: 4 } : { tl: 2, tr: 7, bl: 4, br: 5 };
+    // The lapel facing the light catches it; the other falls into shade. Same
+    // white coat, two values — that is what makes it read as cloth with a
+    // volume rather than as two flat cards either side of a stripe.
+    pen.fill(dir === LIT ? litFace(pal.coat, 0.1) : shadeFace(pal.coat, 0.14));
+    pen.roundRect(x, y, 15, TORSO_H, r);
     pen.fill(pal.coatShade, 0.85);
     pen.rect(dir < 0 ? 27.6 : 34, y + 1, 1.7, TORSO_H - 2);
-    key(pen, pal, 0.4);
-    pen.strokeRoundRect(x, y, 15, TORSO_H, dir < 0 ? { tl: 7, tr: 2, bl: 5, br: 4 } : { tl: 2, tr: 7, bl: 4, br: 5 });
+    key(pen, pal, 0.8);
+    pen.strokeRoundRect(x, y, 15, TORSO_H, r);
   }
 
   pen.fill(pal.strap);
   pen.roundRect(19.8, y + 0.5, 3.4, 14, 1.7);
   pen.roundRect(40.8, y + 0.5, 3.4, 14, 1.7);
 
+  // Collar band: a second, smaller hit of the crew colour up at eye level, where
+  // a player is already looking to read the name tag.
+  pen.fill(pal.crew);
+  pen.roundRect(CX - 7.5, y - 0.6, 15, 3.2, 1.6);
   pen.fill(pal.accent);
   pen.roundRect(43.4, y + 7, 2.4, 4, 1);
   // A hem crease keeps the coat from reading as a flat card.
   pen.fill(pal.coatLine, 0.5);
   pen.rect(16, y + TORSO_H - 1.5, 13, 1);
   pen.rect(35, y + TORSO_H - 1.5, 13, 1);
-  void step;
 }
 
 /**
  * Closed coat with a centre seam and a shaded back panel, plus the backpack the
  * chest straps belong to. The panel shading is what keeps the back from reading
  * as a flat dark slab at play scale.
+ *
+ * The back view is the awkward one for identity: a closed coat shows no shirt at
+ * all, so if the crew colour only lived on the undershirt a player walking away
+ * from you would be anonymous — exactly the moment you most want to know who it
+ * was. The backpack panel carries it instead, at 22x17 the largest single shape
+ * back here, plus a hem band so the colour still reads if the pack is occluded.
  */
 function torsoBack(pen: Pen, pal: CharPalette, ly: number): void {
   const y = TORSO_Y + ly;
@@ -231,45 +336,70 @@ function torsoBack(pen: Pen, pal: CharPalette, ly: number): void {
 
   pen.fill(pal.coat);
   pen.roundRect(15, y, 34, TORSO_H, { tl: 8, tr: 8, bl: 5, br: 5 });
-  key(pen, pal, 0.45);
+  // Lit shoulder to shaded shoulder, across the closed back.
+  pen.fill(shadeFace(pal.coat, 0.16), 0.85);
+  pen.roundRect(CX + 1, y + 1, 16, TORSO_H - 2, { tl: 4, tr: 8, bl: 3, br: 5 });
+  key(pen, pal, 0.85);
   pen.strokeRoundRect(15, y, 34, TORSO_H, { tl: 8, tr: 8, bl: 5, br: 5 });
   pen.fill(pal.coatShade, 0.7);
   pen.rect(CX - 0.7, y + 2, 1.4, TORSO_H - 3);
   pen.fill(pal.coatShade, 0.35);
   pen.roundRect(17, y + 4, 30, TORSO_H - 7, 4);
   // Bounce rim on the lit shoulder, tying the head and coat volume together.
-  pen.fill(pal.rim, 0.22);
+  pen.fill(pal.rim, 0.3);
   pen.roundRect(16.4, y + 2, 2, TORSO_H - 4, 1);
 
   pen.fill(pal.strap);
   pen.roundRect(21, y + 1.5, 22, 17, 5);
   pen.fill(0x1b1e23);
   pen.roundRect(21, y + 1.5, 22, 7, { tl: 5, tr: 5, bl: 1, br: 1 });
+  // The pack's main panel in the seat colour — the back view's identity read.
+  pen.fill(pal.crew);
+  pen.roundRect(23, y + 9.4, 18, 7.6, 2.4);
+  pen.fill(pal.crewShade, 0.7);
+  pen.roundRect(32.6, y + 9.4, 8.4, 7.6, { tl: 1, tr: 2.4, bl: 1, br: 2.4 });
+  seam(pen, pal, 0.5);
+  pen.strokeRoundRect(23, y + 9.4, 18, 7.6, 2.4);
   pen.fill(pal.coatLine, 0.35);
-  pen.rect(22.5, y + 11, 19, 1.2);
+  pen.rect(22.5, y + 8, 19, 1.2);
+  // Coat hem band: a sliver of the same colour below the pack, so identity does
+  // not depend on the pack alone.
+  pen.fill(pal.crew, 0.9);
+  pen.rect(17.5, y + TORSO_H - 2.6, 29, 2);
   pen.fill(pal.accent, 0.9);
-  pen.roundRect(30, y + 13.5, 4, 2.4, 1.2);
+  pen.roundRect(30, y + TORSO_H - 6.5, 4, 2.4, 1.2);
 }
 
-/** Narrower profile, with the pack behind and a visible coat-front edge. */
+/**
+ * Narrower profile, with the pack behind and a visible coat-front edge.
+ *
+ * The side view's identity read is the pack (now crew-coloured) plus the shirt
+ * strip at the coat opening. The strip alone is only 5.5 units, which is why the
+ * pack has to carry it here too.
+ */
 function torsoSide(pen: Pen, pal: CharPalette, ly: number): void {
   const y = TORSO_Y + ly;
   pen.fill(pal.strap);
   pen.roundRect(16.2, y + 2, 9, 15, 4);
+  pen.fill(pal.crew, 0.92);
+  pen.roundRect(17.4, y + 4.6, 6.6, 9.4, 2.6);
   pen.fill(pal.skinShade);
   pen.roundRect(CX - 3, y - 3, 8, 6, 2);
 
   pen.fill(pal.coat);
   pen.roundRect(20, y, 24, TORSO_H, { tl: 8, tr: 7, bl: 5, br: 6 });
-  key(pen, pal, 0.45);
+  key(pen, pal, 0.85);
   pen.strokeRoundRect(20, y, 24, TORSO_H, { tl: 8, tr: 7, bl: 5, br: 6 });
   pen.fill(pal.coatShade, 0.75);
   pen.roundRect(20, y + 1, 5, TORSO_H - 2, { tl: 6, tr: 0, bl: 4, br: 0 });
-  pen.fill(pal.shirt);
+  pen.fill(pal.crew);
   pen.roundRect(38.5, y + 2, 5.5, TORSO_H - 2, { tl: 3, tr: 5, bl: 3, br: 4 });
+  pen.fill(pal.crew);
+  pen.roundRect(CX - 4, y - 0.8, 11, 3, 1.5);
   pen.fill(pal.coatLine, 0.5);
   pen.rect(21, y + TORSO_H - 1.5, 21, 1);
 }
+
 
 // ── Arms ─────────────────────────────────────────────────────────────────────
 
@@ -281,32 +411,48 @@ function armsFront(pen: Pen, pal: CharPalette, ly: number, step: Step): void {
   for (const dir of [-1, 1]) {
     const x = dir < 0 ? 11.6 : 45.8;
     const off = dir < 0 ? -sw : sw;
-    pen.fill(pal.coat);
+    pen.fill(dir === LIT ? litFace(pal.coat, 0.12) : shadeFace(pal.coat, 0.18));
     pen.roundRect(x, y + off, 6.6, 15, 3.2);
-    key(pen, pal, 0.4);
+    key(pen, pal, 0.8);
     pen.strokeRoundRect(x, y + off, 6.6, 15, 3.2);
-    pen.fill(pal.skin);
+    pen.fill(dir === LIT ? pal.skin : pal.skinShade);
     pen.circle(x + 3.3, y + off + 16.5, 3.1);
+    key(pen, pal, 0.65);
+    pen.strokeCircle(x + 3.3, y + off + 16.5, 3.1);
   }
 }
 
+/**
+ * The far arm in a profile view.
+ *
+ * Drawn behind the torso and in shade, and — unlike every other limb — it used to
+ * have no keyline at all, which left the one arm that most needs separating from
+ * the body with nothing separating it.
+ */
 function armSideBack(pen: Pen, pal: CharPalette, ly: number, step: Step): void {
   const y = ARM_Y + ly - step * 2.8;
-  pen.fill(pal.coatShade);
+  pen.fill(shadeFace(pal.coatShade, 0.2));
   pen.roundRect(22.5, y, 6.4, 14.5, 3.1);
+  key(pen, pal, 0.6);
+  pen.strokeRoundRect(22.5, y, 6.4, 14.5, 3.1);
   pen.fill(pal.skinShade);
   pen.circle(25.7, y + 16, 2.9);
+  key(pen, pal, 0.62);
+  pen.strokeCircle(25.7, y + 16, 2.9);
 }
 
 function armSideFront(pen: Pen, pal: CharPalette, ly: number, step: Step): void {
   const y = ARM_Y + ly + step * 3;
-  pen.fill(pal.coat);
+  pen.fill(litFace(pal.coat, 0.1));
   pen.roundRect(33.5, y, 6.8, 15, 3.3);
-  key(pen, pal, 0.4);
+  key(pen, pal, 0.85);
   pen.strokeRoundRect(33.5, y, 6.8, 15, 3.3);
   pen.fill(pal.skin);
   pen.circle(36.9, y + 16.5, 3.1);
+  key(pen, pal, 0.65);
+  pen.strokeCircle(36.9, y + 16.5, 3.1);
 }
+
 // ── Head ─────────────────────────────────────────────────────────────────────
 
 function headFront(pen: Pen, pal: CharPalette, ly: number, form: Form): void {
@@ -332,7 +478,7 @@ function headFront(pen: Pen, pal: CharPalette, ly: number, form: Form): void {
     pen.fill(pal.skinShade, 0.8);
     pen.roundRect(CX - 1.7, y + 9.2, 3.4, 1.3, 0.65);
   }
-  key(pen, pal, 0.4);
+  key(pen, pal, 0.9);
   pen.strokeCircle(CX, y, HEAD_R + 0.9);
 }
 
@@ -362,7 +508,7 @@ function headBack(pen: Pen, pal: CharPalette, ly: number): void {
   pen.poly(tendrilPts({ x: CX + 3, y: y - 8.6, angle: 1.9, len: 16, width: 1.9, curve: 0.55 }));
   pen.fill(pal.hairLight, 0.55);
   pen.poly(tendrilPts({ x: CX - 4.4, y: y - 8, angle: 2.5, len: 13, width: 1.5, curve: 0.4 }));
-  key(pen, pal, 0.4);
+  key(pen, pal, 0.9);
   pen.strokeCircle(CX, y, HEAD_R + 0.9);
 }
 
@@ -396,7 +542,7 @@ function headSide(pen: Pen, pal: CharPalette, ly: number, form: Form): void {
     pen.fill(pal.skinShade, 0.8);
     pen.roundRect(CX + 11.6, y + 8.6, 3, 1.2, 0.6);
   }
-  key(pen, pal, 0.4);
+  key(pen, pal, 0.9);
   pen.strokeCircle(CX, y, HEAD_R + 0.9);
 }
 
@@ -577,6 +723,8 @@ function parasiteBody(pen: Pen, pal: CharPalette, facing: Facing, step: Step): v
   ] as const) {
     pen.fill(pal.pants);
     pen.roundRect(x, LEG_TOP, 8, FEET + off - LEG_TOP - 2, 3.5);
+    key(pen, pal, 0.7);
+    pen.strokeRoundRect(x, LEG_TOP, 8, FEET + off - LEG_TOP - 2, 3.5);
     pen.fill(VINES[1], 0.75);
     pen.poly(tendrilPts({ x: x + 4, y: LEG_TOP + 2, angle: Math.PI / 2 + 0.2, len: 13, width: 2.2, curve: -0.3 }));
   }
@@ -584,6 +732,11 @@ function parasiteBody(pen: Pen, pal: CharPalette, facing: Facing, step: Step): v
   // Trunk.
   pen.fill(pal.coatShade);
   pen.roundRect(15.5, y, 33, TORSO_H + 1, { tl: 9, tr: 9, bl: 6, br: 6 });
+  // The reveal form had no keyline anywhere on it. Its own colours are all dark
+  // greens, so against the jungle it was the *least* separated thing in the game
+  // — the opposite of what the one silhouette that has to read instantly needs.
+  key(pen, pal, 0.85);
+  pen.strokeRoundRect(15.5, y, 33, TORSO_H + 1, { tl: 9, tr: 9, bl: 6, br: 6 });
   pen.fill(pal.coat, 0.9);
   pen.roundRect(18, y + 1.5, 28, TORSO_H - 2, { tl: 8, tr: 8, bl: 5, br: 5 });
 
@@ -635,6 +788,8 @@ function parasiteBody(pen: Pen, pal: CharPalette, facing: Facing, step: Step): v
   }
   pen.fill(pal.hairShade);
   pen.circle(CX, hy, HEAD_R - 0.4);
+  key(pen, pal, 0.8);
+  pen.strokeCircle(CX, hy, HEAD_R - 0.4);
   pen.fill(pal.skinShade, 0.9);
   pen.ellipse(CX, hy + 1.6, 12.4, 12.8);
   for (let i = 0; i < 10; i++) {
@@ -666,11 +821,37 @@ function parasiteBody(pen: Pen, pal: CharPalette, facing: Facing, step: Step): v
 
 // ── Entry points ─────────────────────────────────────────────────────────────
 
+/**
+ * The contact shadow under a standing figure.
+ *
+ * Baked into the sprite rather than added as a scene object, for two reasons: it
+ * then appears in the SVG preview (where the character is otherwise floating), and
+ * it can breathe with the walk cycle — the passing pose lifts the body, so its
+ * shadow tightens and darkens the way a real one does as the gap closes.
+ *
+ * The scene used to place one flat `ellipse(..., 0x000000, 0.38)` behind each
+ * sprite. A single hard ellipse at a third opacity is exactly what a sticker looks
+ * like; four stacked rings on a falloff cost four fills at bake time and put the
+ * character *on* the floor.
+ */
+function contactShadow(pen: Pen, step: Step): void {
+  const tight = step === 0 ? 0.86 : 1;
+  softShadow(pen, CX, FEET - 1, 13.5 * tight, 5 * tight, {
+    // Not black: the floor's own shadow tone, so a character standing on the
+    // bright meeting deck does not carry a hole around with them.
+    color: 0x03150f,
+    alpha: step === 0 ? 0.5 : 0.44,
+    layers: 4,
+    spread: 1.7,
+  });
+}
+
 export function drawCharacter(
   pen: Pen,
   opts: { pal: CharPalette; accessory: Accessory; facing: Facing; step: Step; form: Form }
 ): void {
   const { pal, accessory, facing, step, form } = opts;
+  contactShadow(pen, step);
   if (form === 'parasite') {
     parasiteBody(pen, pal, facing, step);
     return;
@@ -719,17 +900,18 @@ export function drawCorpse(pen: Pen, pal: CharPalette, accessory: Accessory): vo
 
   // Pooled ground shadow. The body has to sit *in* the scene, and a pale coat
   // splayed under a pale coat just smears the silhouette; a shadow anchors it.
-  pen.fill(0x02100c, 0.42);
-  pen.ellipse(34, 42, 27, 13);
-  pen.fill(0x02100c, 0.26);
-  pen.ellipse(16, 40, 13, 9);
+  // Two soft pools rather than two hard ellipses — a body lying down casts a much
+  // larger, softer shadow than a standing one, and the hard version read as a
+  // second dark shape lying next to the corpse instead of underneath it.
+  softShadow(pen, 34, 42, 22, 10.5, { color: 0x02100c, alpha: 0.46, layers: 4, spread: 1.5 });
+  softShadow(pen, 16, 40, 11, 7.5, { color: 0x02100c, alpha: 0.3, layers: 3, spread: 1.5 });
 
   // Far arm, dropped away from the body on the far side.
   const fe = seg(pen, pal, pal.coatShade, 28, 43, 1.35, 8, 4.6, 3.9);
   const fw = seg(pen, pal, pal.coatShade, fe[0], fe[1], 0.75, 6.5, 3.9, 3.2);
   pen.fill(pal.skinShade);
   pen.circle(fw[0], fw[1], 2.9);
-  key(pen, pal, 0.45);
+  key(pen, pal, 0.7);
   pen.strokeCircle(fw[0], fw[1], 2.9);
 
   // Legs, folded at the knee and trailing the same way. Both are drawn before
@@ -762,15 +944,22 @@ export function drawCorpse(pen: Pen, pal: CharPalette, accessory: Accessory): vo
   pen.poly(capsulePts(35, 44, 0.15, 6, 0.8, 0.8, 4));
   pen.fill(pal.rim, 0.2);
   pen.ellipse(32, 27.4, 9, 2.4);
-  key(pen, pal, 0.55);
+  key(pen, pal, 0.85);
   pen.strokePoly(coat, true);
 
   // Collar. The shirt shows here and nowhere else — a large dark panel anywhere
-  // on this body turns it back into a box.
-  pen.fill(pal.shirt);
+  // on this body turns it back into a box. In the seat colour, drained: a body is
+  // the basis of an accusation, so it has to be identifiable as *whose* body, and
+  // the drained tone is the difference between "Amber is dead" and a grey shape.
+  pen.fill(pal.crew);
   pen.ellipse(23.5, 35.5, 4.6, 6.6);
-  key(pen, pal, 0.4);
+  pen.fill(pal.crewShade, 0.6);
+  pen.ellipse(25, 37.4, 3, 4);
+  key(pen, pal, 0.6);
   pen.strokeCircle(23.5, 35.5, 5.4);
+  // A second, smaller hit at the hem, for when the collar is under the head.
+  pen.fill(pal.crew, 0.85);
+  pen.poly(capsulePts(41, 43.6, 0.2, 5, 2.2, 1.8, 5));
 
   // Near arm, bent at the elbow and dropped on the near side. Shade tone so it
   // separates from the coat it overlaps instead of merging into one white shape,
@@ -780,7 +969,7 @@ export function drawCorpse(pen: Pen, pal: CharPalette, accessory: Accessory): vo
   const nw = seg(pen, pal, pal.coatShade, ne[0], ne[1], -0.45, 7, 4.2, 3.4);
   pen.fill(pal.skin);
   pen.circle(nw[0], nw[1], 3);
-  key(pen, pal, 0.45);
+  key(pen, pal, 0.72);
   pen.strokeCircle(nw[0], nw[1], 3);
 
   // Head, turned away — a corpse should never stare back at the lobby.
@@ -798,7 +987,7 @@ export function drawCorpse(pen: Pen, pal: CharPalette, accessory: Accessory): vo
   pen.ellipse(hx - 2.4, hy - 7.4, 4.8, 2.2);
   pen.fill(pal.rim, 0.28);
   pen.ellipse(hx - 9.4, hy - 3, 2.3, 4.6);
-  key(pen, pal, 0.5);
+  key(pen, pal, 0.85);
   pen.strokeCircle(hx, hy, HR);
 
   // The accessory survives, knocked askew — it is how you know who this was.
@@ -815,7 +1004,7 @@ export function drawCorpse(pen: Pen, pal: CharPalette, accessory: Accessory): vo
     pen.poly(capsulePts(hx - 7, hy - 9, 0.35, 14, 2.2, 2.2));
     pen.fill(0x9aa4ab);
     pen.circle(hx - 8.5, hy - 5, 3.6);
-    key(pen, pal, 0.4);
+    key(pen, pal, 0.65);
     pen.strokeCircle(hx - 8.5, hy - 5, 3.6);
   } else {
     // Dropped where the hand let go of it.
