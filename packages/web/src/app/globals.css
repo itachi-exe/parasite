@@ -1453,7 +1453,7 @@ button.vote-card:hover:not(:disabled) {
 
 /* ── Crew list: top-right, clear of the minimap ───────────────────────────── */
 .shell > .sidebar-right {
-  top: calc(max(10px, env(safe-area-inset-top)) + 150px);
+  top: calc(max(10px, env(safe-area-inset-top)) + 172px);
   right: max(10px, env(safe-area-inset-right));
   width: 210px;
   max-height: min(42vh, 340px);
@@ -1586,12 +1586,21 @@ button.vote-card:hover:not(:disabled) {
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-top: 5px;
+  margin-top: 6px;
   font-size: 9.5px;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   color: var(--text-dim);
   text-shadow: 0 1px 3px #000;
+  /* Room names run long ("Central Meeting Platform"), and unconstrained the
+     caption grew past the dial and collided with the crew panel beside it. */
+  max-width: 150px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(10, 14, 19, 0.82);
 }
 
 /* ── Narrow screens ───────────────────────────────────────────────────────── */

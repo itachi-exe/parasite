@@ -36,6 +36,8 @@ import {
   warm,
   cool,
   mix,
+  darken,
+  lighten,
 } from './pen';
 import { ENV, VINES, type RoomTheme } from './palette';
 
@@ -495,6 +497,134 @@ function crate(pen: Pen, x: number, y: number, s: number, t: RoomTheme): void {
   pen.roundRect(x + 5, y + s - 13, 10, 5, 2);
 }
 
+// ── Prop vocabulary, second pass ─────────────────────────────────────────────
+//
+// The first pass gave each room six or seven pieces hugging its edges, which
+// left 340x260 rooms reading as empty floor with the furniture pushed against
+// the walls. The reference this project is measured against fills rooms with
+// working clutter — racks, pipes, paperwork, spills — while still keeping the
+// middle clear to walk through. These are the pieces that were missing.
+
+/** Equipment rack. The tall vertical note a lab wall needs. */
+function rack(pen: Pen, x: number, y: number, w: number, h: number, t: RoomTheme): void {
+  shade(pen, x, y, w, h);
+  pen.fill(darken(t.floor, 0.55), 1);
+  pen.roundRect(x, y, w, h, 3);
+  pen.fill(darken(t.floor, 0.34), 1);
+  pen.roundRect(x + 2, y + 2, w - 4, h - 6, 2);
+  // Uneven fill on purpose: a full rack looks stocked, a patchy one looks used.
+  const rows = Math.max(2, Math.floor((h - 10) / 13));
+  const rr = rng(Math.round(x * 7 + y * 13 + w));
+  for (let i = 0; i < rows; i++) {
+    const uy = y + 5 + i * 13;
+    pen.fill(darken(t.floor, 0.12), 1);
+    pen.rect(x + 4, uy, w - 8, 9);
+    pen.fill(0x000000, 0.35);
+    pen.rect(x + 4, uy + 7, w - 8, 2);
+    if (rr() < 0.62) {
+      pen.fill(rr() < 0.22 ? 0xff7a90 : t.accent, 0.9);
+      pen.circle(x + w - 9, uy + 4.5, 1.9);
+    }
+  }
+  pen.line(1.3, 0x000000, 0.5);
+  pen.strokeRoundRect(x, y, w, h, 3);
+}
+
+/** A pipe run along a wall, with collars. Reads as infrastructure. */
+function pipes(
+  pen: Pen,
+  x: number,
+  y: number,
+  len: number,
+  vertical: boolean,
+  t: RoomTheme
+): void {
+  const th = 7;
+  shade(pen, x, y, vertical ? th : len, vertical ? len : th);
+  for (const [off, col, a] of [
+    [0, darken(t.floor, 0.5), 1],
+    [1.6, lighten(t.floor, 0.16), 0.9],
+    [th - 2.4, darken(t.floor, 0.62), 0.85],
+  ] as const) {
+    pen.fill(col, a);
+    if (vertical) pen.rect(x + off, y, 2.4, len);
+    else pen.rect(x, y + off, len, 2.4);
+  }
+  for (let d = 18; d < len - 10; d += 34) {
+    pen.fill(darken(t.floor, 0.66), 1);
+    if (vertical) pen.roundRect(x - 1.5, y + d, th + 3, 5, 1.5);
+    else pen.roundRect(x + d, y - 1.5, 5, th + 3, 1.5);
+  }
+}
+
+/** Wall-mounted screen or notice panel. */
+function panel(pen: Pen, x: number, y: number, w: number, h: number, t: RoomTheme): void {
+  pen.fill(0x000000, 0.3);
+  pen.roundRect(x + 1, y + 2, w, h, 2);
+  pen.fill(darken(t.floor, 0.6), 1);
+  pen.roundRect(x, y, w, h, 2);
+  pen.fill(t.accent, 0.34);
+  pen.roundRect(x + 2, y + 2, w - 4, h - 4, 1.5);
+  // Scan lines, so it reads as lit rather than as a painted rectangle.
+  pen.fill(t.accent, 0.5);
+  for (let i = 0; i < Math.floor((h - 6) / 4); i++) {
+    pen.rect(x + 4, y + 4 + i * 4, Math.max(3, (w - 8) * (0.4 + ((i * 37) % 60) / 100)), 1.4);
+  }
+}
+
+/** Loose paperwork on the floor. Pure storytelling, costs three fills. */
+function papers(pen: Pen, x: number, y: number, n: number, seed: number): void {
+  const r = rng(seed);
+  for (let i = 0; i < n; i++) {
+    const px = x + range(r, -16, 16);
+    const py = y + range(r, -11, 11);
+    pen.fill(0x000000, 0.22);
+    pen.rect(px + 1, py + 1.5, 9, 6.5);
+    pen.fill(0xd8e7dd, range(r, 0.55, 0.8));
+    pen.rect(px, py, 9, 6.5);
+    pen.fill(0x2b3b34, 0.5);
+    pen.rect(px + 1.4, py + 1.6, 6, 0.9);
+    pen.rect(px + 1.4, py + 3.4, 4.4, 0.9);
+  }
+}
+
+/** A wet stain / spill on the floor. */
+function spill(pen: Pen, x: number, y: number, r0: number, color: number, seed: number): void {
+  const r = rng(seed);
+  pen.fill(color, 0.16);
+  pen.poly(blobPts(x, y, r0, 0.4, r, 10));
+  pen.fill(color, 0.24);
+  pen.poly(blobPts(x, y, r0 * 0.6, 0.45, r, 9));
+}
+
+/** Hazard chevrons painted on the floor — a threshold marker. */
+function hazardStrip(pen: Pen, x: number, y: number, w: number, h: number): void {
+  pen.fill(0xd7a53a, 0.2);
+  pen.rect(x, y, w, h);
+  pen.fill(0x0d1410, 0.3);
+  for (let i = 0; i < w; i += 16) {
+    pen.poly([
+      [x + i, y + h],
+      [x + i + 8, y],
+      [x + i + 15, y],
+      [x + i + 7, y + h],
+    ]);
+  }
+}
+
+/** Toolbox / supply case. */
+function toolbox(pen: Pen, x: number, y: number, t: RoomTheme): void {
+  shade(pen, x, y, 26, 16);
+  pen.fill(darken(t.accent, 0.62), 1);
+  pen.roundRect(x, y, 26, 16, 2.5);
+  pen.fill(darken(t.accent, 0.44), 1);
+  pen.roundRect(x, y, 26, 9, { tl: 2.5, tr: 2.5 });
+  pen.fill(0x0e1512, 0.8);
+  pen.rect(x + 9, y + 6, 8, 3);
+  pen.line(1.2, 0x0b120f, 0.7);
+  pen.strokeRoundRect(x, y, 26, 16, 2.5);
+}
+
 export interface PropOpts extends Rect {
   id: string;
   theme: RoomTheme;
@@ -525,12 +655,33 @@ export function drawProps(pen: Pen, o: PropOpts): void {
     // lab-b is lab-a mirrored: its doorways are on the opposite side.
     const m = o.id === 'lab-b';
     const fx = (lx: number, w: number) => (m ? o.w - lx - w : lx);
+
+    // Floor first, so everything below sits on top of it.
+    spill(pen, o.x + fx(96, 0), o.y + 150, 22, t.accent, o.seed + 5);
+    papers(pen, o.x + fx(210, 0), o.y + 120, 4, o.seed + 41);
+    hazardStrip(pen, o.x + fx(0, 0) + 6, o.y + o.h - 20, 64, 9);
+
+    // Main worktop with its instruments, along the top wall.
     bench(pen, o.x + fx(24, 176), o.y + 34, 176, t);
     monitor(pen, ...at(fx(24, 176) + 40, 46), t);
     monitor(pen, ...at(fx(24, 176) + 108, 46), t);
+    // Second bench, with a toolbox left out on it.
     bench(pen, o.x + fx(24, 96), o.y + 196, 96, t);
+    toolbox(pen, o.x + fx(40, 26), o.y + 186, t);
     stool(pen, ...at(fx(66, 0), 78), t);
     stool(pen, ...at(fx(142, 0), 78), t);
+
+    // Server/equipment racks against the far wall — the vertical mass the room
+    // was missing entirely.
+    rack(pen, o.x + fx(238, 40), o.y + 30, 40, 92, t);
+    rack(pen, o.x + fx(284, 34), o.y + 30, 34, 74, t);
+    // Wall screens above the main bench.
+    panel(pen, o.x + fx(60, 46), o.y + 12, 46, 18, t);
+    panel(pen, o.x + fx(120, 34), o.y + 12, 34, 18, t);
+    // Coolant/power runs.
+    pipes(pen, o.x + fx(6, 7), o.y + 40, 150, true, t);
+    pipes(pen, o.x + 40, o.y + o.h - 14, o.w - 120, false, t);
+
     crate(pen, o.x + fx(250, 34), o.y + 200, 34, t);
     crate(pen, o.x + fx(252, 26), o.y + 166, 26, t);
     // Power run from under the main bench to a junction plate on the side wall.
@@ -546,10 +697,21 @@ export function drawProps(pen: Pen, o: PropOpts): void {
   }
 
   if (o.id === 'greenhouse') {
+    // Damp floor and dropped cuttings — this room leaks.
+    spill(pen, o.x + 120, o.y + 120, 30, ENV.frond[0], o.seed + 7);
+    spill(pen, o.x + 290, o.y + 160, 20, ENV.frond[1], o.seed + 17);
+    papers(pen, o.x + 200, o.y + 70, 3, o.seed + 53);
+
     planter(pen, o.x + 18, o.y + 40, 60, 90, o.seed + 3);
     planter(pen, o.x + 18, o.y + 150, 60, 100, o.seed + 11);
     planter(pen, o.x + 110, o.y + 200, 160, 56, o.seed + 19);
     planter(pen, o.x + 250, o.y + 34, 108, 52, o.seed + 29);
+    // Irrigation running the length of the beds, and a potting bench.
+    pipes(pen, o.x + 14, o.y + 24, o.w - 40, false, t);
+    pipes(pen, o.x + o.w - 16, o.y + 60, 150, true, t);
+    bench(pen, o.x + 292, o.y + 110, 70, t);
+    toolbox(pen, o.x + 300, o.y + 100, t);
+    panel(pen, o.x + 150, o.y + 12, 40, 16, t);
     crate(pen, o.x + 300, o.y + 210, 32, t);
     // Vines climbing the walls from the beds.
     for (let i = 0; i < 6; i++) {
@@ -569,9 +731,19 @@ export function drawProps(pen: Pen, o: PropOpts): void {
   }
 
   if (o.id === 'specimen') {
+    // Containment: hazard paint at the threshold, something spilled that
+    // nobody cleaned up, and more tanks than anyone is comfortable with.
+    hazardStrip(pen, o.x + 12, o.y + o.h - 22, 120, 10);
+    spill(pen, o.x + 210, o.y + 190, 26, 0x8a5ad0, o.seed + 23);
+    papers(pen, o.x + 96, o.y + 96, 5, o.seed + 61);
+
     for (let i = 0; i < 4; i++) tank(pen, o.x + 60 + i * 60, o.y + 240, 18, t);
     tank(pen, o.x + 302, o.y + 66, 21, t);
     tank(pen, o.x + 302, o.y + 156, 21, t);
+    rack(pen, o.x + 14, o.y + 96, 36, 84, t);
+    pipes(pen, o.x + 56, o.y + 16, o.w - 110, false, t);
+    panel(pen, o.x + 214, o.y + 60, 44, 20, t);
+    toolbox(pen, o.x + 150, o.y + 150, t);
     crate(pen, o.x + 40, o.y + 26, 30, t);
     crate(pen, o.x + 76, o.y + 32, 24, t);
     // Containment rack along the top wall.
@@ -608,6 +780,18 @@ export function drawProps(pen: Pen, o: PropOpts): void {
   pen.roundRect(o.x + 10, o.y + 90, 16, 44, 3);
   pen.fill(t.accent, 0.5);
   pen.roundRect(o.x + 12, o.y + 93, 12, 38, 2);
+
+  // This is where the crew argues, so it gets the signs of a room people
+  // actually gather in: a board wall of notices, dropped paperwork, coffee
+  // rings on the deck.
+  panel(pen, o.x + o.w - 74, o.y + 16, 56, 22, t);
+  panel(pen, o.x + o.w - 74, o.y + 44, 34, 16, t);
+  papers(pen, o.x + 92, o.y + o.h - 44, 4, o.seed + 71);
+  papers(pen, o.x + o.w - 120, o.y + 58, 3, o.seed + 79);
+  spill(pen, o.x + 128, o.y + 74, 13, 0x6b4a2a, o.seed + 83);
+  spill(pen, o.x + o.w - 150, o.y + o.h - 70, 10, 0x6b4a2a, o.seed + 89);
+  toolbox(pen, o.x + o.w - 108, o.y + o.h - 40, t);
+  pipes(pen, o.x + 40, o.y + 10, o.w - 130, false, t);
 }
 
 // ── Foliage ──────────────────────────────────────────────────────────────────
