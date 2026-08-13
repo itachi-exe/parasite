@@ -170,6 +170,109 @@ export class MainScene extends Phaser.Scene {
     cam.setZoom(Math.max(1.35, Math.min(2.1, 1.75 * fit)));
   };
 
+  /**
+   * Virtual thumbstick state.
+   *
+   * The game shipped keyboard-only, which makes it unplayable on the device
+   * most people will actually open a hackathon link on. This is a floating
+   * stick rather than a fixed one: it appears wherever the thumb lands, which
+   * is what keeps it usable on both a 430px phone and a tablet without
+   * guessing where the hand is.
+   */
+  private stick: {
+    id: number | null;
+    ox: number;
+    oy: number;
+    ax: number;
+    ay: number;
+    gfx?: Phaser.GameObjects.Graphics;
+  } = { id: null, ox: 0, oy: 0, ax: 0, ay: 0 };
+
+  /** Max thumb travel, in screen px, before the stick reads as fully deflected. */
+  private static readonly STICK_R = 54;
+
+
+  /**
+   * Floating thumbstick.
+   *
+   * Only the left half of the screen arms it, so a thumb reaching for the
+   * action buttons on the right never starts a drag. The stick is drawn in
+   * screen space (setScrollFactor(0)) because it belongs to the hand, not to
+   * the world the camera is panning over.
+   */
+  private setupTouch(): void {
+    const gfx = this.add.graphics().setDepth(9000).setScrollFactor(0).setVisible(false);
+    this.stick.gfx = gfx;
+
+    this.input.addPointer(2);
+
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (this.stick.id !== null) return;
+      if (p.x > this.scale.gameSize.width * 0.55) return;
+      this.stick.id = p.id;
+      this.stick.ox = p.x;
+      this.stick.oy = p.y;
+      this.stick.ax = 0;
+      this.stick.ay = 0;
+      gfx.setVisible(true);
+      this.drawStick(p.x, p.y);
+    });
+
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (p.id !== this.stick.id) return;
+      const dx = p.x - this.stick.ox;
+      const dy = p.y - this.stick.oy;
+      const len = Math.hypot(dx, dy);
+      const R = MainScene.STICK_R;
+      // A small deadzone: a resting thumb drifts, and without one the character
+      // creeps while the player thinks they are standing still.
+      if (len < 8) {
+        this.stick.ax = 0;
+        this.stick.ay = 0;
+        this.drawStick(this.stick.ox, this.stick.oy);
+        return;
+      }
+      const k = Math.min(1, len / R);
+      this.stick.ax = (dx / len) * k;
+      this.stick.ay = (dy / len) * k;
+      const clamped = Math.min(len, R);
+      this.drawStick(this.stick.ox + (dx / len) * clamped, this.stick.oy + (dy / len) * clamped);
+    });
+
+    const release = (p: Phaser.Input.Pointer) => {
+      if (p.id !== this.stick.id) return;
+      this.stick.id = null;
+      this.stick.ax = 0;
+      this.stick.ay = 0;
+      gfx.setVisible(false);
+    };
+    this.input.on('pointerup', release);
+    this.input.on('pointerupoutside', release);
+    // A pointer lost to a system gesture never fires pointerup, and the stick
+    // would stay latched with the player walking into a wall forever.
+    this.input.on('gameout', () => {
+      this.stick.id = null;
+      this.stick.ax = 0;
+      this.stick.ay = 0;
+      gfx.setVisible(false);
+    });
+  }
+
+  private drawStick(tx: number, ty: number): void {
+    const g = this.stick.gfx;
+    if (!g) return;
+    const R = MainScene.STICK_R;
+    g.clear();
+    g.fillStyle(0x0a0e13, 0.5);
+    g.fillCircle(this.stick.ox, this.stick.oy, R);
+    g.lineStyle(3, 0x4ad9f0, 0.5);
+    g.strokeCircle(this.stick.ox, this.stick.oy, R);
+    g.fillStyle(0x4ad9f0, 0.85);
+    g.fillCircle(tx, ty, 22);
+    g.lineStyle(3, 0x05090c, 0.9);
+    g.strokeCircle(tx, ty, 22);
+  }
+
   create() {
     this.cameras.main.setBounds(0, 0, MAP_WIDTH, MAP_HEIGHT);
     this.cameras.main.setBackgroundColor('#04130f');
@@ -198,6 +301,8 @@ export class MainScene extends Phaser.Scene {
       down: kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
       right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
     };
+
+    this.setupTouch();
 
     // Stop WASD/arrows from scrolling the page behind the canvas.
     kb.addCapture(['W', 'A', 'S', 'D', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'SPACE']);
@@ -383,6 +488,18 @@ export class MainScene extends Phaser.Scene {
         ax /= len;
         ay /= len;
       }
+      // Touch wins while the stick is held. Keyboard and stick are never
+      // summed: a laptop with a touchscreen would otherwise get a doubled
+      // vector and move at twice the speed diagonally.
+      if (this.stick.id !== null && (this.stick.ax !== 0 || this.stick.ay !== 0)) {
+        ax = this.stick.ax;
+        ay = this.stick.ay;
+      }
+    } else if (this.stick.id !== null) {
+      // A meeting can open mid-drag; drop the stick rather than leaving it
+      // latched behind the overlay.
+      this.stick.id = null;
+      this.stick.gfx?.setVisible(false);
     }
 
     // Send on change, plus a heartbeat while moving so a dropped packet cannot
