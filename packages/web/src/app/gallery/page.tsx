@@ -62,20 +62,20 @@ export default function GalleryPage() {
 
   return (
     <main className="gal">
-      <h1>Parasite — character art</h1>
+      <h1>Parasite character art</h1>
       <p className="gal-note">
         Everything below is drawn from primitives at runtime. There are no image
         files: {SKINS.length} scientists × {CREW.length} crew colours, plus the
         infected and Parasite forms and the corpse.
       </p>
 
-      <h2>Scientists — {SKINS.length} builds, three facings</h2>
+      <h2>Scientists: {SKINS.length} builds, three facings</h2>
       <div className="gal-row">
         {SKINS.map((s, i) =>
           facings.map((f) => (
             <Figure
               key={`${i}-${f}`}
-              label={`#${i} ${s.accessory} · ${f}`}
+              label={`#${i} ${s.accessory} ${f}`}
               draw={(pen) =>
                 drawCharacter(pen, {
                   pal: s.pal,
@@ -90,7 +90,7 @@ export default function GalleryPage() {
         )}
       </div>
 
-      <h2>Crew colours — {CREW.length} seats</h2>
+      <h2>Crew colours: {CREW.length} seats</h2>
       <p className="gal-note">
         Four builds cannot identify ten players, so the seat colour rides on the
         shirt, collar, pack and coat hem rather than on the face.
@@ -138,7 +138,7 @@ export default function GalleryPage() {
       <h2>Other forms</h2>
       <p className="gal-note">
         The infected and Parasite forms are only ever drawn for your own
-        character, once you have decrypted your own role — another player&apos;s
+        character, once you have decrypted your own role. Another player&apos;s
         skin never changes, which is the confidentiality rule enforced on the
         wire as well as here.
       </p>
@@ -161,7 +161,7 @@ export default function GalleryPage() {
         {facings.map((f) => (
           <Figure
             key={`par-${f}`}
-            label={`parasite · ${f}`}
+            label={`parasite ${f}`}
             draw={(pen) =>
               drawCharacter(pen, {
                 pal: PARASITE_PAL,
