@@ -92,6 +92,53 @@ describe('GameServer (socket integration)', () => {
 
   // Generous timeout: this test drives a real 20Hz server loop over real
   // websockets, so it is wall-clock bound rather than CPU bound.
+  /**
+   * Voice channel isolation.
+   *
+   * The claim this feature is demoed on is that a dead player cannot be heard
+   * by the living — and that it holds because the *server* refuses to relay
+   * signalling across channels, not because the browser mutes something it
+   * already received. This asserts the server half: a signal sent from a dead
+   * socket to a living one must never arrive.
+   */
+  it('never relays voice signalling between the living and the dead', async () => {
+    const code = 'VOICEISO';
+    const a = connect();
+    const b = connect();
+    await join(a, 'Alive', code);
+    await join(b, 'Doomed', code);
+    for (let i = 0; i < MIN_PLAYERS - 2; i++) {
+      await join(connect(), `Filler${i}`, code);
+    }
+
+    await new Promise((res) => a.emit('startGame', res));
+
+    // Kill the second player directly through the room, which is what a purge
+    // ultimately does, without needing to arrange one.
+    const room = game.roomFor(code)!;
+    const victim = [...room.players.values()].find((p) => p.name === 'Doomed')!;
+    victim.alive = false;
+
+    await new Promise((res) => a.emit('voiceJoin', res));
+    await new Promise((res) => b.emit('voiceJoin', res));
+
+    // The living socket must not be offered the dead one as a peer.
+    const aPeers = await new Promise<any>((res) => {
+      a.emit('voiceJoin', () => {});
+      a.once('voicePeers' as any, res);
+    });
+    expect(aPeers.peers.some((p: any) => p.name === 'Doomed')).toBe(false);
+
+    // And a signal from the dead to the living must not arrive.
+    let leaked = false;
+    a.on('voiceSignal' as any, () => {
+      leaked = true;
+    });
+    b.emit('voiceSignal', { to: (a as any).id, data: { sdp: 'should-never-arrive' } } as any);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(leaked).toBe(false);
+  });
+
   it('runs the full loop over the wire: move, task, meeting, vote', { timeout: 20_000 }, async () => {
     const ROOM = 'LOOPTEST';
     const clients: Socket[] = [];
