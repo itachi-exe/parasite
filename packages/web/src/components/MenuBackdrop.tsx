@@ -234,14 +234,10 @@ export default function MenuBackdrop() {
     // else on the screen comes close to — it should feel like it is leaning
     // into the frame.
     //
-    // Its palette is all dark greens (see PARASITE_PAL) and so is the jungle
-    // behind it, so a green glow *behind* a green figure — the first attempt —
-    // rendered it invisible. It needs the opposite: a dark plate to sit
-    // against, and the glow pushed out to a halo around the silhouette.
-    pen.fill(0x030b0a, 0.72);
-    pen.ellipse(1180, 560, 250, 330);
-    pen.fill(0x02090a, 0.5);
-    pen.ellipse(1180, 600, 190, 280);
+    // Nothing drawn behind it. Earlier passes put a glow here, then a dark
+    // plate to replace the glow — both were visible as a shape sitting behind
+    // the creature, which is not what anyone asked for. Its own keyline is what
+    // separates it from the jungle.
     place(pen, 1180, 884, 10.4, true, () =>
       drawCharacter(pen, {
         pal: PARASITE_PAL,
