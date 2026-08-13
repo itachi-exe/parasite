@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- The Parasite's eye. Reuses the palette's parasite green (#7cff4f) and the
+       app's deep chrome (#0a0e13) so the tab matches the game. -->
+  <rect width="64" height="64" rx="14" fill="#0a0e13"/>
+  <circle cx="32" cy="32" r="21" fill="#16301a" stroke="#05090c" stroke-width="3"/>
+  <circle cx="32" cy="32" r="13" fill="#7cff4f"/>
+  <circle cx="32" cy="32" r="6" fill="#d9ffd0"/>
+  <g fill="#3f6b2c">
+    <path d="M32 6 l4 8 -8 0 z"/>
+    <path d="M32 58 l-4 -8 8 0 z"/>
+    <path d="M6 32 l8 -4 0 8 z"/>
+    <path d="M58 32 l-8 4 0 -8 z"/>
+  </g>
+</svg>
