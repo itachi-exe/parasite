@@ -12,6 +12,8 @@ import {
   TASK_LABELS,
   TASK_IDS,
   PLAYER_RADIUS,
+  PLAYER_SPEED,
+  resolveMove,
   JUMP_RANGE,
   type PublicPlayer,
   type TaskId,
@@ -158,6 +160,16 @@ export class MainScene extends Phaser.Scene {
     right: Phaser.Input.Keyboard.Key;
   };
   private lastSent = { ax: 0, ay: 0, at: 0 };
+
+  /**
+   * Where this client believes its own player is, ahead of the server.
+   *
+   * Without this the local character could not move until an input had gone to
+   * the server, been integrated on the next 20Hz tick, and come back — through
+   * a tunnel that is well over a tenth of a second of dead air on every key
+   * press, felt as lag and as stepping between updates.
+   */
+  private predicted: { x: number; y: number } | null = null;
 
   constructor() {
     super('main');
@@ -565,11 +577,48 @@ export class MainScene extends Phaser.Scene {
     const seen = new Set<Seat>();
     let me: PublicPlayer | null = null;
 
-    for (const p of players) {
+    for (let p of players) {
       seen.add(p.seat);
       const v = this.visFor(p);
       const isMe = p.seat === b.mySeat;
       if (isMe) me = p;
+
+      /*
+       * Local prediction, own player only.
+       *
+       * Integrated with the same speed constant and the same resolveMove the
+       * server enforces with — both come from shared/constants.ts — so the
+       * prediction cannot walk anywhere the server would refuse, and the two
+       * agree except for latency. Reconciliation is deliberately gentle: a
+       * hard snap on every packet is what rubber-banding looks like. A large
+       * disagreement (a purge teleport, a respawn, a correction after a
+       * dropped packet) is snapped, because easing across half a room looks
+       * like a bug rather than a correction.
+       */
+      if (isMe) {
+        if (!this.predicted) this.predicted = { x: p.x, y: p.y };
+        const step = (PLAYER_SPEED * delta) / 1000;
+        if (!b.frozen && (ax !== 0 || ay !== 0)) {
+          const moved = resolveMove(
+            this.predicted.x,
+            this.predicted.y,
+            this.predicted.x + ax * step,
+            this.predicted.y + ay * step
+          );
+          this.predicted.x = moved.x;
+          this.predicted.y = moved.y;
+        }
+        const drift = Math.hypot(this.predicted.x - p.x, this.predicted.y - p.y);
+        if (drift > 90) {
+          this.predicted.x = p.x;
+          this.predicted.y = p.y;
+        } else {
+          const k = Math.min(1, (delta / 1000) * 3);
+          this.predicted.x = Phaser.Math.Linear(this.predicted.x, p.x, k);
+          this.predicted.y = Phaser.Math.Linear(this.predicted.y, p.y, k);
+        }
+        p = { ...p, x: this.predicted.x, y: this.predicted.y };
+      }
 
       // Reveal art: only ever for MY OWN sprite, and only once I have decrypted
       // my role. Other players' skins never change — that is the confidentiality
@@ -585,9 +634,10 @@ export class MainScene extends Phaser.Scene {
         v.tag.setColor(isMe ? '#7dffcd' : '#eafff8');
       }
 
-      // Smooth toward the authoritative position. My own sprite snaps harder so
-      // input feels immediate; others interpolate so 20Hz looks continuous.
-      const t = isMe ? 0.55 : Math.min(1, (delta / 1000) * 12);
+      // My own sprite is drawn at the predicted position outright — lerping
+      // toward a value this client already owns would only add latency back.
+      // Everyone else is interpolated so 20Hz reads as continuous motion.
+      const t = isMe ? 1 : Math.min(1, (delta / 1000) * 14);
       const x = Phaser.Math.Linear(v.c.x, p.x, t);
       const y = Phaser.Math.Linear(v.c.y, p.y, t);
 
@@ -699,7 +749,7 @@ export class MainScene extends Phaser.Scene {
     let bodyInRange: Seat | null = null;
 
     if (me.alive) {
-      for (const p of players) {
+      for (let p of players) {
         if (p.seat === me.seat || !p.alive) continue;
         if (Math.hypot(me.x - p.x, me.y - p.y) <= JUMP_RANGE) {
           jumpTargets.push({ seat: p.seat, name: p.name });

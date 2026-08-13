@@ -296,7 +296,12 @@ export class GameServer {
   }
 
   private start(): void {
-    const every = this.config.positionEveryTicks ?? 2;
+    // Every tick, not every other one. The default was 2, which made the
+    // "20Hz" the client interpolates against actually 10Hz — a 100ms gap
+    // between authoritative positions, on top of tunnel latency. The payload
+    // is a seat, two rounded ints and two flags per player; at ten players
+    // that is a few hundred bytes twenty times a second.
+    const every = this.config.positionEveryTicks ?? 1;
     this.timer = setInterval(() => {
       this.tickCount++;
       for (const room of [...this.rooms.values()]) {
