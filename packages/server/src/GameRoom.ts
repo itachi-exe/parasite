@@ -519,9 +519,10 @@ export class GameRoom {
   }
 
   /** Bots vote once the ballot is open, after a human-ish pause. */
-  private stepBotVotes(now: number): void {
+  private stepBotVotes(now: number): boolean {
     const m = this.meeting;
-    if (!m || m.stage !== 'voting') return;
+    if (!m || m.stage !== 'voting') return false;
+    let voted = false;
 
     const alive = [...this.players.values()].filter((p) => p.alive);
     for (const p of this.players.values()) {
@@ -542,8 +543,10 @@ export class GameRoom {
         Math.random() < 0.6 || others.length === 0
           ? 'skip'
           : others[Math.floor(Math.random() * others.length)]!.seat;
-      this.castVote(p.id, target as Seat | 'skip');
+      const res = this.castVote(p.id, target as Seat | 'skip');
+      if (res.ok) voted = true;
     }
+    return voted;
   }
 
   // ── Movement ───────────────────────────────────────────────────────────────
@@ -572,7 +575,11 @@ export class GameRoom {
     // Bots decide before movement integrates, so their intent is applied on
     // the same tick as a human's held key rather than one behind it.
     emits.push(...this.stepBots(now));
-    this.stepBotVotes(now);
+    // castVote mutates the meeting but emits nothing by itself — a socket vote
+    // is broadcast by the caller in GameServer. Bot votes have no caller, so
+    // without this the tally sat at "0/4 votes in" on every client for the
+    // whole voting window while the server counted them silently.
+    if (this.stepBotVotes(now)) emits.push({ type: 'state' });
 
     if (this.phase === 'playing') {
       for (const p of this.players.values()) {
