@@ -53,7 +53,7 @@ npm run dev              # server on 127.0.0.1:9101, web on 127.0.0.1:9100
 ```
 
 Open **http://127.0.0.1:9100** in four tabs, enter the same room code, and hit
-Start. It runs with no wallet and no deployed contract — see the two modes
+Start. It also runs with no wallet and no deployed contract, see the two modes
 below.
 
 ### The two role modes
@@ -83,15 +83,29 @@ npm run deploy:baseSepolia
 # put the printed address in NEXT_PUBLIC_PARASITE_GAME_ADDRESS, then npm run dev
 ```
 
-**No deployment was performed for this build** — no credentials were provided.
-See `BUILD_REPORT.md` for exactly what that leaves unverified.
+### Live deployment
+
+**Inco mode is deployed and running.**
+
+| | |
+|---|---|
+| Contract | [`0x9013FEFb791591D644088C0618aC922052346619`](https://sepolia.basescan.org/address/0x9013FEFb791591D644088C0618aC922052346619) |
+| Chain | Base Sepolia (84532) |
+| Inco Lightning | `0xe9CB49A5b16C6D4a093E5900AA8b450FD40541B6` |
+
+The contract is pre-funded with 0.001 ETH for FHE fees. The running instance
+reports `role mode INCO (on-chain encrypted roles)` at boot, and the server
+holds no oracle in that mode — it cannot derive anyone's role.
+
+Players need a wallet on Base Sepolia to decrypt their own role; the role badge
+in the top bar prompts for one and does the decryption in the browser.
 
 ---
 
 ## Tests
 
 ```bash
-npm test          # 114 tests: shared rules, server sockets, contracts
+npm test          # shared rules, server sockets, contracts
 npm run typecheck
 ```
 
