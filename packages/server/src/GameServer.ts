@@ -28,6 +28,16 @@ export class GameServer {
   readonly io: Server<ClientToServerEvents, ServerToClientEvents>;
   private rooms = new Map<string, GameRoom>();
   private socketRoom = new Map<string, string>();
+  /**
+   * Sockets that have opted in to voice, and which channel they are on.
+   *
+   * The living and the dead are separate channels, and separation is enforced
+   * here rather than in the browser: a signalling message is only relayed
+   * between two sockets on the same channel, so a living player's browser is
+   * never offered a peer connection to a dead one. There is no stream to mute
+   * because there is no connection to carry it.
+   */
+  private voice = new Map<string, 'alive' | 'dead'>();
   private timer: NodeJS.Timeout | null = null;
   private tickCount = 0;
   private config: GameServerConfig;
@@ -234,6 +244,45 @@ export class GameServer {
         ack?.({ ok: true });
       });
 
+      // ── Voice ──────────────────────────────────────────────────────────
+      socket.on('voiceJoin', (ack) => {
+        const room = this.roomOf(socket);
+        const me = room?.players.get(socket.id);
+        if (!room || !me) return ack?.({ ok: false, error: 'Not in a room.' });
+
+        const channel: 'alive' | 'dead' = me.alive ? 'alive' : 'dead';
+        this.voice.set(socket.id, channel);
+
+        const peers = [...this.voice.entries()]
+          .filter(([id, ch]) => id !== socket.id && ch === channel)
+          .map(([id]) => {
+            const p = room.players.get(id);
+            return p ? { id, seat: p.seat, name: p.name } : null;
+          })
+          .filter((p): p is { id: string; seat: number; name: string } => p !== null);
+
+        socket.emit('voicePeers', { peers });
+        for (const p of peers) {
+          this.io.to(p.id).emit('voicePeerJoined', {
+            id: socket.id,
+            seat: me.seat,
+            name: me.name,
+          });
+        }
+        ack?.({ ok: true });
+      });
+
+      socket.on('voiceLeave', () => this.dropVoice(socket.id));
+
+      socket.on('voiceSignal', (payload) => {
+        const mine = this.voice.get(socket.id);
+        const theirs = this.voice.get(payload?.to ?? '');
+        // Same channel or nothing happens. This is the whole guarantee.
+        if (!mine || !theirs || mine !== theirs) return;
+        if (this.socketRoom.get(socket.id) !== this.socketRoom.get(payload.to)) return;
+        this.io.to(payload.to).emit('voiceSignal', { from: socket.id, data: payload.data });
+      });
+
       socket.on('leaveLobby', (ack) => {
         const room = this.roomOf(socket);
         if (room) {
@@ -272,6 +321,7 @@ export class GameServer {
                 : `${p.name} lost connection. Their body stays in the game.`,
           });
         }
+        this.dropVoice(socket.id);
         room.disconnect(socket.id);
         this.socketRoom.delete(socket.id);
         // Top the lobby back up, so the seat a leaver freed does not strand
@@ -281,6 +331,16 @@ export class GameServer {
         this.broadcastState(room);
       });
     });
+  }
+
+  /** Remove a socket from voice and tell whoever it was talking to. */
+  private dropVoice(id: string): void {
+    if (!this.voice.has(id)) return;
+    const channel = this.voice.get(id);
+    this.voice.delete(id);
+    for (const [other, ch] of this.voice) {
+      if (ch === channel) this.io.to(other).emit('voicePeerLeft', { id });
+    }
   }
 
   private roomOf(socket: Socket): GameRoom | undefined {

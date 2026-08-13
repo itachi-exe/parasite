@@ -2028,3 +2028,41 @@ button.role-badge.needs-wallet .role-main {
   padding: 10px 16px;
   font-size: 11px;
 }
+
+/* ── Voice ─────────────────────────────────────────────────────────────────── */
+
+.voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--edge-soft);
+  border-radius: 9px;
+  background: var(--inset);
+}
+
+.voice-note {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+
+.btn-menu.ptt {
+  min-width: 150px;
+}
+
+/* Talking is the one state that has to be unmistakable at a glance, because
+   the alternative is a player who does not realise they are broadcasting. */
+.btn-menu.ptt.live {
+  border-color: var(--danger);
+  background: rgba(255, 95, 126, 0.2);
+  color: #ffd6de;
+}
+
+.btn-menu.quiet {
+  padding: 8px 12px;
+  font-size: 10px;
+  opacity: 0.75;
+}

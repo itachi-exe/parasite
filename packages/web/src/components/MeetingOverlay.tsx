@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { MeetingState, PublicPlayer, Seat } from '@parasite/shared';
 import { useDialog } from '@/hooks/useDialog';
 import ChatPanel from './ChatPanel';
+import VoiceBar from './VoiceBar';
+import type { VoiceState } from '@/hooks/useVoice';
 
 const SKIN_SRC = [
   '/sprites/human-0.png',
@@ -28,6 +30,10 @@ export default function MeetingOverlay(props: {
   roleMode: 'inco' | 'simulated';
   chat: import('@parasite/shared').ChatMessage[];
   onSendChat: (text: string) => void;
+  voice: VoiceState;
+  onEnableVoice: () => void;
+  onDisableVoice: () => void;
+  onTransmit: (on: boolean) => void;
 }) {
   const { meeting, players, mySeat, onVote, roleMode } = props;
   const [now, setNow] = useState(Date.now());
@@ -195,6 +201,16 @@ export default function MeetingOverlay(props: {
 
         {/* The argument is the game. Dead players still get a box, but the
             server only delivers their lines to other dead players. */}
+        {meeting.stage !== 'result' && (
+          <VoiceBar
+            voice={props.voice}
+            alive={!!me?.alive}
+            onEnable={props.onEnableVoice}
+            onDisable={props.onDisableVoice}
+            onTransmit={props.onTransmit}
+          />
+        )}
+
         {meeting.stage !== 'result' && (
           <ChatPanel
             messages={props.chat}

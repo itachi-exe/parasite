@@ -37,6 +37,8 @@ export interface UseGameSocket {
   /** Room chat, oldest first, capped so a long game cannot grow without bound. */
   chat: ChatMessage[];
   sendChat: (text: string) => void;
+  /** Exposed for useVoice, which needs to speak the signalling protocol. */
+  socket: Socket | null;
   /** Live positions, updated at the server tick rate between full snapshots. */
   positions: Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>;
   join: (opts: { code: string; name: string; skin: SkinId; address: string | null }) => Promise<void>;
@@ -189,6 +191,7 @@ export function useGameSocket(): UseGameSocket {
     simulatedRole,
     lastAlert,
     chat,
+    socket: socketRef.current,
     sendChat: (text: string) => {
       const t = text.trim();
       if (t) socketRef.current?.emit('sendChat', { text: t } as never);

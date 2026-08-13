@@ -155,6 +155,10 @@ export interface RoomState {
 
 export interface ClientToServerEvents {
   sendChat: (payload: { text: string }, ack?: (res: SimpleResult) => void) => void;
+  /** Opt in to voice. The server decides which channel you belong on. */
+  voiceJoin: (ack?: (res: SimpleResult) => void) => void;
+  voiceLeave: () => void;
+  voiceSignal: (payload: { to: string; data: unknown }) => void;
   join: (
     payload: { code: string; name: string; skin: SkinId; address: string | null },
     ack: (res: JoinResult) => void
@@ -227,6 +231,13 @@ export interface ServerToClientEvents {
   toast: (payload: { kind: 'info' | 'warn' | 'error'; text: string }) => void;
   kicked: (payload: { reason: string }) => void;
   chat: (payload: ChatMessage) => void;
+  /** Everyone currently on your voice channel, sent when you join it. */
+  voicePeers: (payload: { peers: { id: string; seat: Seat; name: string }[] }) => void;
+  /** Someone joined your channel; the existing member makes the offer. */
+  voicePeerJoined: (payload: { id: string; seat: Seat; name: string }) => void;
+  voicePeerLeft: (payload: { id: string }) => void;
+  /** Opaque SDP/ICE payload relayed between two peers on the same channel. */
+  voiceSignal: (payload: { from: string; data: unknown }) => void;
 }
 
 export interface JoinResult {

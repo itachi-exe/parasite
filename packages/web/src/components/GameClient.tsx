@@ -18,6 +18,7 @@ import {
   type Seat,
 } from '@parasite/shared';
 import { useGameSocket } from '@/hooks/useGameSocket';
+import { useVoice } from '@/hooks/useVoice';
 import { useRole } from '@/hooks/useRole';
 import { PARASITE_GAME_ADDRESS } from '@/lib/contract';
 import Lobby from './Lobby';
@@ -57,6 +58,11 @@ export default function GameClient() {
 
   const isParasite = role.isParasite === true;
   const me = state?.players.find((p) => p.seat === mySeat) ?? null;
+
+  const { voice, enableVoice, disableVoice, setTransmitting } = useVoice(
+    sock.socket,
+    me?.alive ?? true
+  );
 
   // Every player gets all five tasks. The Parasite's are fake (see TaskList).
   const myTasks = useMemo(() => TASK_DEFS.map((t) => t.id), []);
@@ -472,6 +478,10 @@ export default function GameClient() {
         <MeetingOverlay
           chat={sock.chat}
           onSendChat={sock.sendChat}
+          voice={voice}
+          onEnableVoice={enableVoice}
+          onDisableVoice={disableVoice}
+          onTransmit={setTransmitting}
           meeting={state.meeting}
           players={state.players}
           mySeat={mySeat}
