@@ -816,11 +816,11 @@ function parasiteBody(pen: Pen, pal: CharPalette, facing: Facing, step: Step): v
   } else if (facing === 'side') {
     eye(pen, pal, CX + 7.4, hy + 2.2, 1.15);
   }
-  // Spore motes.
-  for (let i = 0; i < 7; i++) {
-    pen.fill(pal.accent, range(r, 0.2, 0.5));
-    pen.circle(CX + range(r, -17, 17), hy + range(r, -13, 26), range(r, 0.7, 1.5));
-  }
+  // No spore motes. Seven accent-coloured dots floating around the head read as
+  // texture at a 40px sprite, but the title screen draws this same figure at
+  // 10x, where they become large bright circles scattered over the scene with
+  // nothing tying them to the creature. The tendril crown already carries the
+  // "shedding" read without them.
 }
 
 // ── Entry points ─────────────────────────────────────────────────────────────
