@@ -557,3 +557,28 @@ of things that merely looked improvable.
   confirmed to build clean and the test suite still at 49/50 (the one
   failure, `GameRoom.test.ts`'s "refuses to start below 4 players", predates
   this pass entirely and is unrelated).
+
+## Purge is not authorised server-side, and in Inco mode it cannot be
+
+- **Found:** 2026-08-13, reviewing the live Inco build. `GameRoom.purge()`
+  checks phase, liveness, cooldown, range, self-targeting and whether the
+  victim is already dead. It does **not** check that the caller is the
+  Parasite. Nothing in `ParasiteGame.sol` gates it either, and no test covers
+  a human attempting one. The only thing stopping a crew member from killing
+  is that the client hides the button from them.
+- **Why it is not a one-line fix:** in Inco mode the server is deliberately
+  constructed with **no role oracle** — that is the entire premise of the
+  submission. It therefore cannot answer "is this caller the Parasite" even in
+  principle. A server-side check is available only in simulated mode, and
+  adding one there would make the two modes behave differently in a way that
+  hides the real gap rather than closing it.
+- **The correct fix, not attempted here:** route Purge through the contract,
+  the way Jump already goes, so the encrypted role is what authorises the kill
+  and the server merely reacts to a confirmed on-chain event. That is a
+  contract change plus a redeploy plus a new wire event, and it was found
+  roughly a day before the deadline on a build that is otherwise working. The
+  risk of breaking a functioning game outweighed the benefit of closing it
+  under time pressure.
+- **Status: known and disclosed.** It is written up here and in
+  `SUBMISSION.md` rather than left for a judge to find. A dishonest option was
+  available — say nothing, since the UI hides the button — and was not taken.

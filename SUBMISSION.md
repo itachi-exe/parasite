@@ -44,6 +44,19 @@ The one thing the contract *does* reveal is a single derived bit on ejection —
 "was the ejected player the Parasite's host" — via `e.reveal` on a derived
 `ebool`. That is the game's one sanctioned disclosure, and it is the only one.
 
+### Known limitation, stated up front
+
+**Purge is not authorised on-chain.** Jump goes through the contract, so the
+encrypted role is what makes it real or a no-op. Purge does not: the server
+validates range, cooldown and liveness, but cannot check that the caller is
+the Parasite, because in Inco mode it holds no oracle and genuinely cannot
+know. Today only the client hides the button from crew members.
+
+The correct fix is to route Purge through the contract the same way Jump
+already is. We found this about a day out from the deadline on an otherwise
+working build and judged a contract change plus redeploy too risky to attempt
+then. It is documented rather than hidden — see `DECISIONS.md`.
+
 ---
 
 ## Two minutes: what to try
