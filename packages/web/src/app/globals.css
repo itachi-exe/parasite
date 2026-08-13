@@ -1918,3 +1918,29 @@ button.vote-card:hover:not(:disabled) {
   color: var(--text-dim);
   margin-top: 3px;
 }
+
+/* Role badge as a call to action. In Inco mode with no wallet there is
+   genuinely nothing to display — the role is a ciphertext only the player's
+   wallet can open — so the badge asks for one instead of sitting on a
+   placeholder that reads as a broken game. */
+button.role-badge.needs-wallet {
+  cursor: pointer;
+  border-color: var(--warn);
+  background: rgba(255, 200, 97, 0.1);
+  text-align: left;
+  font-family: inherit;
+}
+
+button.role-badge.needs-wallet:hover {
+  background: rgba(255, 200, 97, 0.18);
+}
+
+button.role-badge.needs-wallet .role-dot {
+  background: var(--warn);
+  box-shadow: 0 0 10px var(--warn);
+}
+
+button.role-badge.needs-wallet .role-main {
+  color: var(--warn);
+  font-size: 11.5px;
+}

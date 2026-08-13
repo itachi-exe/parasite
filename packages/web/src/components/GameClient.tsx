@@ -257,7 +257,7 @@ export default function GameClient() {
           </div>
         </div>
 
-        <RoleBadge role={role} />
+        <RoleBadge role={role} onConnectWallet={connectWallet} />
       </header>
 
       <TaskList
