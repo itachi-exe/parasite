@@ -89,7 +89,7 @@ export default function Lobby(props: {
         <MenuBackdrop />
         <div className="menu-scrim" />
         <div className="waitroom" role="region" aria-label="Lobby">
-          <h2 className="waitroom-title">VIRELIA · {code}</h2>
+          <h2 className="waitroom-title">VIRELIA {code}</h2>
 
           <div className="waitroom-head" role="status">
             <strong>
@@ -119,7 +119,7 @@ export default function Lobby(props: {
 
           <p className="mono-note">
             Once the expedition starts, <strong>nobody else can join</strong> and nobody
-            can leave — enforced on the server, not just here.
+            can leave. Enforced on the server, not just here.
           </p>
         </div>
       </div>
@@ -158,7 +158,7 @@ export default function Lobby(props: {
         </h1>
 
         <p className="tagline">
-          Virelia Research Outpost · one of you is not what they appear to be
+          Virelia Research Outpost. One of you is not what they appear to be
         </p>
 
         <button
@@ -192,7 +192,7 @@ export default function Lobby(props: {
           {roleMode === 'inco' ? (
             <>
               Roles and the Jump run on Base Sepolia. Your role is decrypted in your
-              browser — the server never sees it.
+              browser. The server never sees it.
             </>
           ) : (
             <>
@@ -386,7 +386,7 @@ function HowSheet(props: {
             you argue, and you vote.
           </li>
           <li>
-            The Jump button is shown to <em>everyone</em>, on purpose — a button only the
+            The Jump button is shown to <em>everyone</em>, on purpose. A button only the
             Parasite could see would give the role away over a shoulder.
           </li>
         </ul>
@@ -396,7 +396,7 @@ function HowSheet(props: {
             <>
               <span className="pill ok">INCO MODE</span> Roles and the Jump run on Base
               Sepolia at <code>{props.contractAddress}</code>. Your role is decrypted in
-              your browser with your wallet — the server never sees it.
+              your browser with your wallet. The server never sees it.
             </>
           ) : (
             <>

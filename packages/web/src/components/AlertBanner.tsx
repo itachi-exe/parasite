@@ -61,7 +61,7 @@ export default function AlertBanner(props: { alert: AlertPayload | null }) {
         {(shown.victim || shown.actor) && (
           <span className="alert-sub">
             {shown.kind === 'body' && shown.victim
-              ? `${shown.victim} — reported by ${shown.actor ?? 'someone'}`
+              ? `${shown.victim} reported by ${shown.actor ?? 'someone'}`
               : shown.kind === 'emergency'
                 ? `called by ${shown.actor ?? 'someone'}`
                 : (shown.victim ?? '')}

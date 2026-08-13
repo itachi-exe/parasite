@@ -181,7 +181,7 @@ export default function MeetingOverlay(props: {
             </div>
             <div className="muted" role="status">
               {votesIn}/{alive.length} votes in
-              {!me?.alive && ' · the dead cannot vote'}
+              {!me?.alive && '. The dead cannot vote'}
             </div>
           </>
         )}

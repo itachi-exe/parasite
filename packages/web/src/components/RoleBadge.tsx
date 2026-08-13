@@ -13,8 +13,8 @@ export default function RoleBadge({ role }: { role: RoleState }) {
   const known = role.isParasite !== null;
   const cls = !known ? '' : role.isParasite ? ' parasite' : ' human';
 
-  const label = role.busy ? 'DECRYPTING…' : known ? (role.isParasite ? 'PARASITE' : 'HUMAN') : '—';
-  const mode = role.mode === 'inco' ? 'INCO ENCRYPTED' : 'SIMULATED · NOT ENCRYPTED';
+  const label = role.busy ? 'DECRYPTING…' : known ? (role.isParasite ? 'PARASITE' : 'HUMAN') : '...';
+  const mode = role.mode === 'inco' ? 'INCO ENCRYPTED' : 'SIMULATED, NOT ENCRYPTED';
   const explanation =
     role.mode === 'inco'
       ? 'Decrypted in your browser from an Inco ciphertext only your wallet can open.'

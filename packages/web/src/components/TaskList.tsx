@@ -50,7 +50,7 @@ export default function TaskList(props: {
                   <br />
                   <span className="task-where">{where}</span>
                   <span className="sr-only">
-                    {isDone ? ' — complete' : isActive ? ' — in reach now' : ' — not started'}
+                    {isDone ? ', complete' : isActive ? ', in reach now' : ', not started'}
                   </span>
                 </span>
               </li>
@@ -60,7 +60,7 @@ export default function TaskList(props: {
 
         {isParasite && (
           <div className="mono-note">
-            Your tasks are <strong>fake</strong>. Completing them does nothing — but the
+            Your tasks are <strong>fake</strong>. Completing them does nothing, but the
             list looks identical to a human&apos;s, so nobody can tell by watching your
             screen.
           </div>

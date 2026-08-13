@@ -27,7 +27,7 @@ export default function CrewList(props: {
   return (
     <section className="panel sidebar sidebar-right" aria-labelledby="crew-heading">
       <h2 className="panel-title" id="crew-heading">
-        Crew · {players.filter((p) => p.alive).length} alive
+        Crew {players.filter((p) => p.alive).length} alive
       </h2>
       <div className="scroll">
         <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -48,7 +48,7 @@ export default function CrewList(props: {
                   </div>
                   <div className="crew-sub">
                     {p.alive ? `${p.tasksDone}/5 tasks` : 'deceased'}
-                    {!p.connected && p.alive ? ' · offline' : ''}
+                    {!p.connected && p.alive ? ' offline' : ''}
                   </div>
                 </div>
                 {/* "DEAD" is already in crew-sub as "deceased" for AT. */}
