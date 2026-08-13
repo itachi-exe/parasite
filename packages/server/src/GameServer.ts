@@ -92,6 +92,14 @@ export class GameServer {
         // A real player has arrived: drop a bot if one was holding a seat for
         // them. Done before the ack so the client's first snapshot is correct.
         room.syncBots();
+
+        // Tell the room someone turned up. socket.to() rather than io.to():
+        // it excludes the sender, so nobody is told about their own arrival.
+        // "they", not "he" — the lobby knows a name, not a person.
+        socket.to(code).emit('toast', {
+          kind: 'info',
+          text: `${player.name} joined. Are they the Parasite?`,
+        });
         socket.emit('you', { id: player.id, seat: player.seat });
         ack?.({
           ok: true,
