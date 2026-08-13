@@ -26,6 +26,21 @@ export type SkinId = 0 | 1 | 2 | 3;
 
 // ── Public player state ──────────────────────────────────────────────────────
 
+/** One line of room chat. */
+export interface ChatMessage {
+  seat: Seat;
+  name: string;
+  text: string;
+  /** Unix ms, server-stamped. */
+  at: number;
+  /**
+   * Sent by a dead player. The dead can talk among themselves without the
+   * living hearing it, so this decides who the server fans it out to and how
+   * the client renders it.
+   */
+  ghost: boolean;
+}
+
 export interface PublicPlayer {
   id: PlayerId;
   seat: Seat;
@@ -139,6 +154,7 @@ export interface RoomState {
 // ── Client → Server ──────────────────────────────────────────────────────────
 
 export interface ClientToServerEvents {
+  sendChat: (payload: { text: string }, ack?: (res: SimpleResult) => void) => void;
   join: (
     payload: { code: string; name: string; skin: SkinId; address: string | null },
     ack: (res: JoinResult) => void
@@ -210,6 +226,7 @@ export interface ServerToClientEvents {
   playerPurged: (payload: { victimSeat: Seat; x: number; y: number }) => void;
   toast: (payload: { kind: 'info' | 'warn' | 'error'; text: string }) => void;
   kicked: (payload: { reason: string }) => void;
+  chat: (payload: ChatMessage) => void;
 }
 
 export interface JoinResult {

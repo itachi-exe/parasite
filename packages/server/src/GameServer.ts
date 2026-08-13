@@ -198,9 +198,54 @@ export class GameServer {
         void this.flush(room, emits);
       });
 
+      /*
+       * Room chat.
+       *
+       * The dead talk only to the dead. Sending a ghost line to the living
+       * would hand them information the game is built on withholding — and it
+       * is fanned out per-socket rather than to the room, so a living client
+       * never receives the message at all. Filtering it in the UI would leave
+       * it sitting in the network tab.
+       */
+      socket.on('sendChat', (payload, ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        const me = room.players.get(socket.id);
+        if (!me) return ack?.({ ok: false, error: 'Not in this game.' });
+
+        const text = (payload?.text ?? '').trim().slice(0, 140);
+        if (!text) return ack?.({ ok: false, error: 'Nothing to say.' });
+
+        const msg = {
+          seat: me.seat,
+          name: me.name,
+          text,
+          at: Date.now(),
+          ghost: !me.alive,
+        };
+
+        if (msg.ghost) {
+          for (const p of room.players.values()) {
+            if (!p.alive && !p.isBot) this.io.to(p.id).emit('chat', msg);
+          }
+        } else {
+          this.io.to(room.code).emit('chat', msg);
+        }
+        ack?.({ ok: true });
+      });
+
       socket.on('leaveLobby', (ack) => {
         const room = this.roomOf(socket);
         if (room) {
+          // Name has to be read before disconnect(), which deletes the player
+          // outright while the room is still in the lobby.
+          const who = room.players.get(socket.id)?.name;
+          if (who) {
+            socket.to(room.code).emit('toast', {
+              kind: 'info',
+              text: `${who} left the outpost.`,
+            });
+          }
           room.disconnect(socket.id);
           void socket.leave(room.code);
           this.socketRoom.delete(socket.id);
@@ -214,6 +259,19 @@ export class GameServer {
       socket.on('disconnect', () => {
         const room = this.roomOf(socket);
         if (!room) return;
+        const p = room.players.get(socket.id);
+        if (p) {
+          // Mid-game a seat is kept and only marked disconnected, so the two
+          // cases read differently: someone who leaves the lobby is gone,
+          // someone who drops mid-round is still a suspect.
+          socket.to(room.code).emit('toast', {
+            kind: 'warn',
+            text:
+              room.phase === 'lobby'
+                ? `${p.name} left the outpost.`
+                : `${p.name} lost connection. Their body stays in the game.`,
+          });
+        }
         room.disconnect(socket.id);
         this.socketRoom.delete(socket.id);
         // Top the lobby back up, so the seat a leaver freed does not strand

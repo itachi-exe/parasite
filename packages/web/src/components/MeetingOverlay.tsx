@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MeetingState, PublicPlayer, Seat } from '@parasite/shared';
 import { useDialog } from '@/hooks/useDialog';
+import ChatPanel from './ChatPanel';
 
 const SKIN_SRC = [
   '/sprites/human-0.png',
@@ -25,6 +26,8 @@ export default function MeetingOverlay(props: {
   mySeat: Seat | null;
   onVote: (target: Seat | 'skip') => void;
   roleMode: 'inco' | 'simulated';
+  chat: import('@parasite/shared').ChatMessage[];
+  onSendChat: (text: string) => void;
 }) {
   const { meeting, players, mySeat, onVote, roleMode } = props;
   const [now, setNow] = useState(Date.now());
@@ -188,6 +191,18 @@ export default function MeetingOverlay(props: {
 
         {meeting.stage === 'result' && meeting.result && (
           <ResultView result={meeting.result} players={players} roleMode={roleMode} />
+        )}
+
+        {/* The argument is the game. Dead players still get a box, but the
+            server only delivers their lines to other dead players. */}
+        {meeting.stage !== 'result' && (
+          <ChatPanel
+            messages={props.chat}
+            mySeat={mySeat}
+            canSend={true}
+            placeholder={me?.alive ? 'Accuse someone' : 'Only the dead can hear you'}
+            onSend={props.onSendChat}
+          />
         )}
       </div>
     </div>

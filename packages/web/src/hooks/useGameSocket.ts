@@ -10,6 +10,7 @@ import type {
   MeetingResult,
   MeetingReason,
   EndState,
+  ChatMessage,
 } from '@parasite/shared';
 import { SERVER_URL } from '@/lib/contract';
 
@@ -33,6 +34,9 @@ export interface UseGameSocket {
    * are two distinct events rather than one unchanged object.
    */
   lastAlert: { reason: MeetingReason; nonce: number } | null;
+  /** Room chat, oldest first, capped so a long game cannot grow without bound. */
+  chat: ChatMessage[];
+  sendChat: (text: string) => void;
   /** Live positions, updated at the server tick rate between full snapshots. */
   positions: Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>;
   join: (opts: { code: string; name: string; skin: SkinId; address: string | null }) => Promise<void>;
@@ -68,6 +72,7 @@ export function useGameSocket(): UseGameSocket {
     null
   );
   const alertNonce = useRef(0);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
   const positions = useRef(
     new Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>()
   );
@@ -103,6 +108,7 @@ export function useGameSocket(): UseGameSocket {
         setEnd(null);
         setLastMeetingResult(null);
         setSimulatedRole(null);
+        setChat([]);
       }
     });
 
@@ -122,6 +128,7 @@ export function useGameSocket(): UseGameSocket {
     socket.on('meetingStarted', (p: { reason: MeetingReason; endsAt: number }) => {
       setLastAlert({ reason: p.reason, nonce: ++alertNonce.current });
     });
+    socket.on('chat', (m: ChatMessage) => setChat((c) => [...c.slice(-79), m]));
     socket.on('meetingResult', (r: MeetingResult) => setLastMeetingResult(r));
     socket.on('gameEnded', (e: EndState) => setEnd(e));
     socket.on('toast', (t: { kind: Toast['kind']; text: string }) => pushToast(t.kind, t.text));
@@ -181,6 +188,11 @@ export function useGameSocket(): UseGameSocket {
     end,
     simulatedRole,
     lastAlert,
+    chat,
+    sendChat: (text: string) => {
+      const t = text.trim();
+      if (t) socketRef.current?.emit('sendChat', { text: t } as never);
+    },
     positions: positions.current,
     join,
     startGame: () => simpleAction('startGame'),

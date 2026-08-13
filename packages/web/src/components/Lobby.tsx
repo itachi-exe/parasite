@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { MIN_PLAYERS, MAX_PLAYERS, type RoomState, type SkinId } from '@parasite/shared';
+import { MIN_PLAYERS, MAX_PLAYERS, type RoomState, type SkinId, type Seat } from '@parasite/shared';
 import { useDialog } from '@/hooks/useDialog';
 import MenuBackdrop from './MenuBackdrop';
+import ChatPanel from './ChatPanel';
 
 const SKIN_SRC = [
   '/sprites/human-0.png',
@@ -30,6 +31,9 @@ type Sheet = null | 'join' | 'how';
  * gives the title screen room to be a title screen instead of a form.
  */
 export default function Lobby(props: {
+  chat: import('@parasite/shared').ChatMessage[];
+  onSendChat: (text: string) => void;
+  mySeat: Seat | null;
   state: RoomState | null;
   connected: boolean;
   joined: boolean;
@@ -119,6 +123,14 @@ export default function Lobby(props: {
           ) : (
             <div className="muted">Waiting for the lobby host to start…</div>
           )}
+
+          <ChatPanel
+            messages={props.chat}
+            mySeat={props.mySeat}
+            canSend={true}
+            placeholder="Say hello"
+            onSend={props.onSendChat}
+          />
 
           <p className="mono-note">
             Once the expedition starts, <strong>nobody else can join</strong> and nobody

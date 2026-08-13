@@ -444,6 +444,9 @@ export default function GameClient() {
       {/* Overlays */}
       {inLobby && (
         <Lobby
+          chat={sock.chat}
+          onSendChat={sock.sendChat}
+          mySeat={mySeat}
           state={state}
           connected={sock.connected}
           joined={joined}
@@ -467,6 +470,8 @@ export default function GameClient() {
 
       {state?.meeting && phase === 'meeting' && (
         <MeetingOverlay
+          chat={sock.chat}
+          onSendChat={sock.sendChat}
           meeting={state.meeting}
           players={state.players}
           mySeat={mySeat}
