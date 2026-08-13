@@ -102,9 +102,12 @@ export default function Lobby(props: {
 
           <ul className="crew-strip">
             {state?.players.map((p) => (
-              <li key={p.seat} className="crew-chip">
+              <li key={p.seat} className={`crew-chip${p.isBot ? ' bot' : ''}`}>
                 <img src={SKIN_SRC[p.skin % 4]} alt="" />
-                <span>{p.name}</span>
+                <span>
+                  {p.name}
+                  {p.isBot ? ' (bot)' : ''}
+                </span>
               </li>
             ))}
           </ul>

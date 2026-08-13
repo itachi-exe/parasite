@@ -1944,3 +1944,15 @@ button.role-badge.needs-wallet .role-main {
   color: var(--warn);
   font-size: 11.5px;
 }
+
+/* Bots are labelled, not disguised. A lobby that pads itself to a playable
+   size and does not say so is misrepresenting who you are deducing against. */
+.crew-tag.bot {
+  color: var(--text-dim);
+  border-color: var(--edge-soft);
+}
+
+.crew-chip.bot {
+  opacity: 0.78;
+  border-style: dashed;
+}

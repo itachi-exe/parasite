@@ -45,6 +45,15 @@ export interface PublicPlayer {
    */
   bodyReported: boolean;
   connected: boolean;
+  /**
+   * A server-driven filler player.
+   *
+   * Public on purpose. A lobby that quietly pads itself with bots and does not
+   * say so is lying to the player about who they are deducing against — and
+   * since bots are never assigned the Parasite (see GameRoom.botSeats), hiding
+   * the flag would also hide a real piece of game information.
+   */
+  isBot: boolean;
   /** Public count only — which tasks are done is public in Among Us too. */
   tasksDone: number;
   emergencyMeetingsLeft: number;

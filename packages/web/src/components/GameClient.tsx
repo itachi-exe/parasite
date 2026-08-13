@@ -268,6 +268,18 @@ export default function GameClient() {
       />
 
       <div className="stage">
+        {/*
+          Phaser is mounted only while a round is actually in progress.
+          Its keyboard manager calls preventDefault() on W/A/S/D and the
+          arrows globally, and no combination of addKey(enableCapture=false),
+          clearCaptures() or manager.preventDefault would stop it — so while
+          the lobby was open those four letters never reached the name or
+          outpost-code fields. "Solo" arrived as "olo", "Okafor" as "Okfor".
+          Not mounting the game under a screen that is asking the player to
+          type is both the fix and the more sensible arrangement: the title
+          screen draws its own canvas and has no use for a game loop.
+        */}
+        {!inLobby && (
         <GameStage
           state={state}
           mySeat={mySeat}
@@ -276,6 +288,7 @@ export default function GameClient() {
           onInput={sock.sendInput}
           inputEnabled={phase === 'playing' && !!me?.alive && !openTask}
         />
+        )}
         {/*
           The canvas is an opaque <canvas> to assistive tech — a player using one
           has no way to know where they are standing. This is its text

@@ -8,6 +8,7 @@ import {
   TASKS_PER_PLAYER,
   TASK_STATIONS,
   TASK_INTERACT_RADIUS,
+  AREAS,
   PURGE_RANGE,
   PURGE_COOLDOWN_MS,
   JUMP_RANGE,
@@ -45,6 +46,31 @@ export interface RoomPlayer extends PublicPlayer {
   ay: number;
   lastPurgeAt: number;
   lastJumpAt: number;
+  /** Bot steering. Absent on humans. */
+  bot?: BotBrain;
+}
+
+/**
+ * A bot's private state.
+ *
+ * Bots are ordinary RoomPlayers that happen to have no socket, so every rule
+ * already written — movement, collision, task validation, meetings, win
+ * conditions — applies to them without a single special case. Only the
+ * *intent* is synthesised, and that is all this holds.
+ */
+interface BotBrain {
+  /** Where it is walking. */
+  target: { x: number; y: number } | null;
+  /** Which task it is walking to, if any. */
+  taskId: TaskId | null;
+  /** Wall-clock ms at which the current action completes. */
+  actAt: number;
+  /** For unsticking: last position sampled, and when. */
+  lastX: number;
+  lastY: number;
+  stuckSince: number;
+  /** When this bot will cast its vote in the current meeting. */
+  voteAt: number;
 }
 
 export interface MeetingTimings {
@@ -184,6 +210,7 @@ export class GameRoom {
       alive: true,
       bodyReported: false,
       connected: true,
+      isBot: false,
       tasksDone: 0,
       emergencyMeetingsLeft: EMERGENCY_MEETINGS_PER_PLAYER,
       tasks: new Set(),
@@ -232,7 +259,9 @@ export class GameRoom {
 
   /** Reconnect to an existing seat (lobby-phase reconnects only). */
   isEmpty(): boolean {
-    return this.players.size === 0;
+    // Bots do not keep a room alive. Without this, the last human leaving would
+    // leave a lobby of bots running forever and never be reaped.
+    return this.humanCount() === 0;
   }
 
   /** Seats are re-packed in the lobby so the contract gets a dense 0..n-1 array. */
@@ -269,10 +298,13 @@ export class GameRoom {
     this.phase = 'assigning';
 
     if (this.roleMode === 'simulated' && this.localOracle) {
-      const seats = [...this.players.values()].map((p) => ({
-        seat: p.seat,
-        address: p.address,
-      }));
+      // Humans only. A bot has no wallet, so in Inco mode it could never
+      // decrypt a role it was given — it would be a Parasite that does not
+      // know it is one, and the round would be unwinnable. Excluded in
+      // simulated mode too, so both modes behave identically.
+      const seats = [...this.players.values()]
+        .filter((p) => !p.isBot)
+        .map((p) => ({ seat: p.seat, address: p.address }));
       const { gameId } = await this.localOracle.startGame({ seats });
       this.chainGameId = gameId;
     }
@@ -285,6 +317,233 @@ export class GameRoom {
   /** Inco mode: the host reports the on-chain game id after createGame(). */
   setChainGameId(id: string): void {
     this.chainGameId = id;
+  }
+
+
+  // ── Bots ───────────────────────────────────────────────────────────────────
+  //
+  // A lobby that cannot reach MIN_PLAYERS is unplayable, which meant anyone
+  // opening the link alone — a judge included — could look at the game but not
+  // play it. Bots fill the gap and step aside as real players arrive.
+
+  /** Names drawn in order so a lobby does not show "Bot 1, Bot 2". */
+  private static readonly BOT_NAMES = [
+    'Adeyemi', 'Novak', 'Sato', 'Okonkwo', 'Rivera',
+    'Haddad', 'Lindqvist', 'Mensah', 'Petrov', 'Duarte',
+  ];
+
+  /** Seats currently held by bots. */
+  botSeats(): Seat[] {
+    return [...this.players.values()].filter((p) => p.isBot).map((p) => p.seat);
+  }
+
+  private humanCount(): number {
+    return [...this.players.values()].filter((p) => !p.isBot).length;
+  }
+
+  /**
+   * Bring the lobby up to MIN_PLAYERS with bots, and drop bots again as humans
+   * arrive. Lobby-only: seats are fixed once a game starts, so a bot that made
+   * it to the start line plays the round out.
+   */
+  syncBots(): boolean {
+    if (this.phase !== 'lobby') return false;
+    let changed = false;
+
+    // Humans first: a bot must never cost a real player a seat.
+    while (this.players.size > Math.max(MIN_PLAYERS, this.humanCount())) {
+      const bots = [...this.players.values()].filter((p) => p.isBot);
+      if (bots.length === 0) break;
+      const drop = bots.reduce((a, b) => (a.seat > b.seat ? a : b));
+      this.players.delete(drop.id);
+      changed = true;
+    }
+
+    // Nobody at all means an empty room, not a room full of bots.
+    if (this.humanCount() === 0) {
+      for (const p of [...this.players.values()]) {
+        if (p.isBot) {
+          this.players.delete(p.id);
+          changed = true;
+        }
+      }
+      return changed;
+    }
+
+    while (this.players.size < MIN_PLAYERS && this.players.size < MAX_PLAYERS) {
+      this.addBot();
+      changed = true;
+    }
+    return changed;
+  }
+
+  private addBot(): void {
+    const seat = this.nextSeat++;
+    const angle = (seat / MAX_PLAYERS) * Math.PI * 2;
+    const used = new Set([...this.players.values()].map((p) => p.name));
+    const name =
+      GameRoom.BOT_NAMES.find((n) => !used.has(n)) ?? `Scientist ${seat + 1}`;
+
+    const bot: RoomPlayer = {
+      id: `bot:${seat}`,
+      seat,
+      name,
+      skin: (seat % 4) as SkinId,
+      // No wallet: a bot cannot decrypt anything, which is also why it is never
+      // eligible to be the Parasite.
+      address: null,
+      x: SPAWN_CENTER.x + Math.cos(angle) * SPAWN_RADIUS,
+      y: SPAWN_CENTER.y + Math.sin(angle) * SPAWN_RADIUS,
+      dir: 1,
+      moving: false,
+      alive: true,
+      bodyReported: false,
+      connected: true,
+      isBot: true,
+      tasksDone: 0,
+      emergencyMeetingsLeft: 0,
+      tasks: new Set(),
+      ax: 0,
+      ay: 0,
+      lastPurgeAt: 0,
+      lastJumpAt: 0,
+      bot: {
+        target: null,
+        taskId: null,
+        actAt: 0,
+        lastX: 0,
+        lastY: 0,
+        stuckSince: 0,
+        voteAt: 0,
+      },
+    };
+    this.players.set(bot.id, bot);
+  }
+
+  /**
+   * Drive every bot for one tick.
+   *
+   * Deliberately writes `ax`/`ay` rather than moving anyone directly, so bots
+   * go through exactly the same movement, collision and walkability path as a
+   * human holding a key. A bot cannot end up somewhere a player could not.
+   */
+  private stepBots(now: number): Emit[] {
+    const emits: Emit[] = [];
+
+    for (const p of this.players.values()) {
+      const b = p.bot;
+      if (!b || !p.alive) {
+        if (b) {
+          p.ax = 0;
+          p.ay = 0;
+        }
+        continue;
+      }
+
+      if (this.phase === 'meeting') {
+        p.ax = 0;
+        p.ay = 0;
+        continue;
+      }
+      if (this.phase !== 'playing') continue;
+
+      // Mid-task: stand still until it finishes.
+      if (b.actAt > now) {
+        p.ax = 0;
+        p.ay = 0;
+        continue;
+      }
+
+      // Arrived at a task station: complete it through the public entry point
+      // so range and phase are validated the same as for a human.
+      if (b.taskId && b.target && distance(p, b.target) <= TASK_INTERACT_RADIUS) {
+        const { emits: e } = this.completeTask(p.id, b.taskId);
+        emits.push(...e);
+        b.taskId = null;
+        b.target = null;
+        // A pause, so a bot does not clear five stations in one sprint.
+        b.actAt = now + 2500 + Math.floor(Math.random() * 2500);
+        p.ax = 0;
+        p.ay = 0;
+        continue;
+      }
+
+      if (!b.target) this.retargetBot(p, b);
+      if (!b.target) continue;
+
+      // Unstick: walls are axis-aligned and bots walk straight lines, so a bot
+      // can press into a corner indefinitely. If it has not moved in a second,
+      // pick somewhere else.
+      if (Math.hypot(p.x - b.lastX, p.y - b.lastY) < 2) {
+        if (b.stuckSince === 0) b.stuckSince = now;
+        else if (now - b.stuckSince > 1000) {
+          this.retargetBot(p, b, true);
+          b.stuckSince = 0;
+        }
+      } else {
+        b.stuckSince = 0;
+      }
+      b.lastX = p.x;
+      b.lastY = p.y;
+
+      const dx = b.target.x - p.x;
+      const dy = b.target.y - p.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 6) {
+        b.target = null;
+        p.ax = 0;
+        p.ay = 0;
+        continue;
+      }
+      p.ax = dx / len;
+      p.ay = dy / len;
+    }
+
+    return emits;
+  }
+
+  /** Choose the next place a bot walks to: an unfinished task, else a wander. */
+  private retargetBot(p: RoomPlayer, b: BotBrain, forceWander = false): void {
+    const undone = TASK_IDS.filter((t) => !p.tasks.has(t));
+    if (!forceWander && undone.length > 0 && Math.random() < 0.75) {
+      const id = undone[Math.floor(Math.random() * undone.length)]!;
+      b.taskId = id;
+      b.target = { ...TASK_STATIONS[id] };
+      return;
+    }
+    // Wander to a random room centre, which is always walkable by construction.
+    const rooms = AREAS.filter((a) => a.id !== 'path');
+    const room = rooms[Math.floor(Math.random() * rooms.length)]!;
+    b.taskId = null;
+    b.target = { x: room.x + room.w / 2, y: room.y + room.h / 2 };
+  }
+
+  /** Bots vote once the ballot is open, after a human-ish pause. */
+  private stepBotVotes(now: number): void {
+    const m = this.meeting;
+    if (!m || m.stage !== 'voting') return;
+
+    const alive = [...this.players.values()].filter((p) => p.alive);
+    for (const p of this.players.values()) {
+      const b = p.bot;
+      if (!b || !p.alive) continue;
+      if (m.votes[p.seat] !== undefined) continue;
+      if (b.voteAt === 0) {
+        b.voteAt = now + 3000 + Math.floor(Math.random() * 9000);
+        continue;
+      }
+      if (now < b.voteAt) continue;
+
+      // A bot has no information, so it must not pretend to: it skips most of
+      // the time rather than throwing a random accusation that reads as a
+      // signal to the humans reading the vote.
+      const others = alive.filter((o) => o.seat !== p.seat);
+      const target =
+        Math.random() < 0.6 || others.length === 0
+          ? 'skip'
+          : others[Math.floor(Math.random() * others.length)]!.seat;
+      this.castVote(p.id, target as Seat | 'skip');
+    }
   }
 
   // ── Movement ───────────────────────────────────────────────────────────────
@@ -309,6 +568,11 @@ export class GameRoom {
     this.lastTickAt = now;
     const dt = dtMs / 1000;
     const emits: Emit[] = [];
+
+    // Bots decide before movement integrates, so their intent is applied on
+    // the same tick as a human's held key rather than one behind it.
+    emits.push(...this.stepBots(now));
+    this.stepBotVotes(now);
 
     if (this.phase === 'playing') {
       for (const p of this.players.values()) {
@@ -532,6 +796,13 @@ export class GameRoom {
     return [{ type: 'meetingStarted', reason, endsAt }, { type: 'state' }];
   }
 
+  /** Clear per-meeting bot state so timers do not carry across meetings. */
+  private resetBotVoteTimers(): void {
+    for (const p of this.players.values()) {
+      if (p.bot) p.bot.voteAt = 0;
+    }
+  }
+
   castVote(id: PlayerId, target: Seat | 'skip'): ActionResult {
     const p = this.players.get(id);
     if (!p) return fail('Not in this game.');
@@ -565,6 +836,7 @@ export class GameRoom {
     if (m.stage === 'discussion') {
       if (now >= m.endsAt) {
         m.stage = 'voting';
+        this.resetBotVoteTimers();
         m.endsAt = now + this.timings.votingMs;
         emits.push({ type: 'state' });
       }
@@ -752,6 +1024,7 @@ export class GameRoom {
           alive: p.alive,
           bodyReported: p.bodyReported,
           connected: p.connected,
+          isBot: p.isBot,
           tasksDone: p.tasksDone,
           emergencyMeetingsLeft: p.emergencyMeetingsLeft,
         })),

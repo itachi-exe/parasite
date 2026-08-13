@@ -49,14 +49,21 @@ export default function CrewList(props: {
                   <div className="crew-sub">
                     {p.alive ? `${p.tasksDone}/5 tasks` : 'deceased'}
                     {!p.connected && p.alive ? ' offline' : ''}
+                    {p.isBot ? ' filling a seat' : ''}
                   </div>
                 </div>
-                {/* "DEAD" is already in crew-sub as "deceased" for AT. */}
-                {!p.alive && (
+                {/* "DEAD" is already in crew-sub as "deceased" for AT, and
+                    "filling a seat" carries the bot state, so both tags are
+                    decorative duplicates rather than the only source. */}
+                {!p.alive ? (
                   <span className="crew-tag" aria-hidden="true">
                     DEAD
                   </span>
-                )}
+                ) : p.isBot ? (
+                  <span className="crew-tag bot" aria-hidden="true">
+                    BOT
+                  </span>
+                ) : null}
               </li>
             );
           })}

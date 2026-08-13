@@ -89,6 +89,9 @@ export class GameServer {
 
         this.socketRoom.set(socket.id, code);
         await socket.join(code);
+        // A real player has arrived: drop a bot if one was holding a seat for
+        // them. Done before the ack so the client's first snapshot is correct.
+        room.syncBots();
         socket.emit('you', { id: player.id, seat: player.seat });
         ack?.({
           ok: true,
@@ -107,10 +110,12 @@ export class GameServer {
         ack?.({ ok: true });
         this.io.to(room.code).emit('gameStarted', {
           chainGameId: room.chainGameId,
-          seats: [...room.players.values()].map((p) => ({
-            seat: p.seat,
-            address: p.address,
-          })),
+          // Humans only, matching the seat list the room hands its oracle:
+          // a bot has no wallet and can never decrypt a role, so it must not
+          // be a candidate on-chain either.
+          seats: [...room.players.values()]
+            .filter((p) => !p.isBot)
+            .map((p) => ({ seat: p.seat, address: p.address })),
         });
         this.broadcastState(room);
         await this.deliverSimulatedRoles(room);
@@ -191,6 +196,7 @@ export class GameServer {
           room.disconnect(socket.id);
           void socket.leave(room.code);
           this.socketRoom.delete(socket.id);
+          room.syncBots();
           this.cleanup(room);
           this.broadcastState(room);
         }
@@ -202,6 +208,9 @@ export class GameServer {
         if (!room) return;
         room.disconnect(socket.id);
         this.socketRoom.delete(socket.id);
+        // Top the lobby back up, so the seat a leaver freed does not strand
+        // whoever is left below the minimum.
+        room.syncBots();
         this.cleanup(room);
         this.broadcastState(room);
       });

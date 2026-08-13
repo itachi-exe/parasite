@@ -106,6 +106,25 @@ const VERTICAL_BIAS = 1.6;
  * `matchMedia` because the scene module is imported dynamically and must not
  * assume a browser that has it.
  */
+/**
+ * Whether a DOM text field currently has focus.
+ *
+ * The canvas and the HTML chrome share one keyboard, so without this a player
+ * typing a name would also walk across the map behind the dialog.
+ */
+function typingInAField(): boolean {
+  if (typeof document === 'undefined') return false;
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  return (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    (el as HTMLElement).isContentEditable === true
+  );
+}
+
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -291,16 +310,40 @@ export class MainScene extends Phaser.Scene {
     this.drawStations();
 
     const kb = this.input.keyboard!;
+    // The `false` is the whole point: it is addKey's `enableCapture` flag.
+    // Left at its default, Phaser calls preventDefault() on these keys
+    // globally, and W/A/S/D never reached a focused text field — a player
+    // could not type those letters into their own name. "Solo" arrived as
+    // "olo", "Okafor" as "Okfor". The game polls `isDown`, so it needs the
+    // key state, not the capture, and the page does not scroll.
     this.keys = {
-      W: kb.addKey('W'),
-      A: kb.addKey('A'),
-      S: kb.addKey('S'),
-      D: kb.addKey('D'),
-      up: kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
-      left: kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-      down: kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
-      right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
+      W: kb.addKey('W', false),
+      A: kb.addKey('A', false),
+      S: kb.addKey('S', false),
+      D: kb.addKey('D', false),
+      up: kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP, false),
+      left: kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT, false),
+      down: kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN, false),
+      right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT, false),
     };
+
+    /*
+     * Stop Phaser calling preventDefault() on W/A/S/D and the arrows.
+     *
+     * Passing `false` to addKey above is not sufficient on its own: the
+     * KeyboardManager keeps its own capture list and its own `preventDefault`
+     * flag, and that is what was actually swallowing the keys. Until this,
+     * a player could not type W, A, S or D into their own name or the outpost
+     * code — "Solo" arrived as "olo", "Okafor" as "Okfor", and every dropped
+     * character was one of those four.
+     *
+     * The game polls `isDown` each frame, so it needs the key *state*, never
+     * the capture. Nothing else relied on it: html/body are overflow:hidden,
+     * so the arrows have no page scroll to suppress.
+     */
+    kb.clearCaptures();
+    kb.manager.clearCaptures();
+    kb.manager.preventDefault = false;
 
     this.setupTouch();
 
@@ -478,7 +521,9 @@ export class MainScene extends Phaser.Scene {
     // ── Input ────────────────────────────────────────────────────────────────
     let ax = 0;
     let ay = 0;
-    if (!b.frozen) {
+    // Belt and braces alongside clearCaptures(): while the player is typing,
+    // their keystrokes belong to the field, not to the character.
+    if (!b.frozen && !typingInAField()) {
       if (this.keys.A.isDown || this.keys.left.isDown) ax -= 1;
       if (this.keys.D.isDown || this.keys.right.isDown) ax += 1;
       if (this.keys.W.isDown || this.keys.up.isDown) ay -= 1;
