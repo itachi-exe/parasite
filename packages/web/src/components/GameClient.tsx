@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BaseError, InsufficientFundsError } from 'viem';
 import {
   MAX_PLAYERS,
   TASKS_PER_PLAYER,
@@ -34,6 +35,31 @@ import GameStage from './GameStage';
 import RoleBadge from './RoleBadge';
 import EndOverlay from './EndOverlay';
 import RoleRevealOverlay from './RoleRevealOverlay';
+
+/**
+ * Turn a failed createGame() into something a player can actually read.
+ *
+ * viem's own `.message` for a failed write is enormous by design (full
+ * calldata hex, contract address, docs link, version tag — several hundred
+ * to 1500+ characters) — meant for a developer's terminal, not a toast. It
+ * was landing in the UI verbatim before this, which is its own bug on top
+ * of whatever the underlying failure was.
+ *
+ * viem's `.shortMessage` is already a one-line human summary, and `.walk()`
+ * finds specific causes in the error chain. The one worth naming explicitly:
+ * the host's own wallet needs a small amount of Base Sepolia ETH to pay
+ * createGame's fee — a brand-new wallet has none, and "insufficient funds"
+ * on its own doesn't tell a player what to do about it.
+ */
+function describeCreateGameError(err: unknown): string {
+  if (err instanceof BaseError) {
+    if (err.walk((e) => e instanceof InsufficientFundsError)) {
+      return 'Your wallet needs a small amount of Base Sepolia testnet ETH to start an Inco-mode game. Get some from a Base Sepolia faucet, then try again.';
+    }
+    return err.shortMessage;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
 
 /**
  * Top-level game client. Owns composition and the local-only concerns
@@ -139,10 +165,11 @@ export default function GameClient() {
           sock.pushToast('error', res.error ?? 'Could not report the chain game id.');
         }
       } catch (err) {
-        sock.pushToast(
-          'error',
-          `Could not create the game on-chain: ${err instanceof Error ? err.message : String(err)}`
-        );
+        // Let a fresh state update (a retry, a jump, anything that touches
+        // chainGameId's dependents) attempt this again rather than staying
+        // permanently given up on after one failed transaction.
+        createGameAttempted.current = null;
+        sock.pushToast('error', `Could not create the game on-chain: ${describeCreateGameError(err)}`);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
