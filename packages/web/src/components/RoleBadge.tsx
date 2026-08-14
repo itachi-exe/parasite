@@ -12,20 +12,35 @@ import type { RoleState } from '@/hooks/useRole';
  * In Inco mode the role is a ciphertext only the player's own wallet can open,
  * so with no wallet connected there is genuinely nothing to show. That state
  * used to render as a bare placeholder that sat there indefinitely, which reads
- * as the game being broken rather than as an action being required — so when a
+ * as the game being broken rather than as an action being required, so when a
  * connect handler is available the badge becomes a button that asks for one.
+ *
+ * Once connected, there was previously no way back out of that state short of
+ * revoking the site from the wallet extension itself. `onDisconnectWallet`
+ * closes that gap: a small control appears alongside the badge whenever a
+ * wallet address is attached, letting a player forget the wrong account (or
+ * just disconnect) without leaving the page.
  */
 export default function RoleBadge({
   role,
+  walletAddress,
   onConnectWallet,
+  onDisconnectWallet,
 }: {
   role: RoleState;
+  walletAddress?: string | null;
   onConnectWallet?: () => void;
+  onDisconnectWallet?: () => void;
 }) {
   const known = role.isParasite !== null;
   const cls = !known ? '' : role.isParasite ? ' parasite' : ' human';
 
-  const needsWallet = role.mode === 'inco' && !known && !role.busy;
+  // A wallet being connected has to rule this out, or the badge gets stuck
+  // showing "CONNECT WALLET" (with no way to disconnect) for the whole
+  // stretch between connecting and the game actually starting, since nothing
+  // decrypts until there is a chain game id to decrypt against — and again
+  // after any failed decrypt, since that also leaves `known` false.
+  const needsWallet = role.mode === 'inco' && !known && !role.busy && !walletAddress;
   const mode = role.mode === 'inco' ? 'INCO ENCRYPTED' : 'SIMULATED, NOT ENCRYPTED';
   const explanation =
     role.mode === 'inco'
@@ -52,6 +67,10 @@ export default function RoleBadge({
     </>
   );
 
+  // Connected: a wallet is attached, whether or not the role has resolved
+  // yet. Only case with anything to disconnect from.
+  const canDisconnect = role.mode === 'inco' && !!walletAddress && !!onDisconnectWallet;
+
   if (needsWallet && onConnectWallet) {
     return (
       <button
@@ -68,7 +87,7 @@ export default function RoleBadge({
 
   return (
     <div
-      className={`role-badge${cls}`}
+      className={`role-badge${cls}${canDisconnect ? ' has-wallet' : ''}`}
       title={explanation}
       /*
         role=status, not a bare div: the badge starts unresolved, flips to
@@ -79,6 +98,20 @@ export default function RoleBadge({
       aria-label={`Your role: ${label}. ${mode}. ${explanation}`}
     >
       {body}
+      {canDisconnect && (
+        <button
+          type="button"
+          className="role-disconnect"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDisconnectWallet!();
+          }}
+          title={`Disconnect ${walletAddress!.slice(0, 6)}…${walletAddress!.slice(-4)}`}
+          aria-label={`Disconnect wallet ${walletAddress}`}
+        >
+          <span aria-hidden="true">&times;</span>
+        </button>
+      )}
     </div>
   );
 }

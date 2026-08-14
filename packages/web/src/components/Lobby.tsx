@@ -42,6 +42,7 @@ export default function Lobby(props: {
   contractAddress: string | null;
   walletAddress: string | null;
   onConnectWallet: () => void;
+  onDisconnectWallet: () => void;
   /* Returns a promise so the button can show a pending state; a plain void
      return is still accepted. */
   onJoin: (opts: { code: string; name: string; skin: SkinId }) => void | Promise<void>;
@@ -56,6 +57,7 @@ export default function Lobby(props: {
     contractAddress,
     walletAddress,
     onConnectWallet,
+    onDisconnectWallet,
     onJoin,
     onStart,
   } = props;
@@ -189,7 +191,11 @@ export default function Lobby(props: {
             How to play
           </button>
           {roleMode === 'inco' && (
-            <button className="btn-menu" onClick={onConnectWallet}>
+            <button
+              className="btn-menu"
+              onClick={walletAddress ? onDisconnectWallet : onConnectWallet}
+              title={walletAddress ? 'Click to disconnect' : undefined}
+            >
               {walletAddress
                 ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
                 : 'Connect wallet'}

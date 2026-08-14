@@ -126,6 +126,17 @@ export default function GameClient() {
     }
   }, [sock]);
 
+  /**
+   * There is no wallet-side "disconnect" call in EIP-1193 (MetaMask et al.
+   * keep the site authorized until the user revokes it from the extension
+   * itself). This is the standard dApp pattern instead: forget the address
+   * locally, so the app stops using it, and the connect button comes back.
+   */
+  const disconnectWallet = useCallback(() => {
+    setWallet(null);
+    sock.pushToast('info', 'Wallet disconnected.');
+  }, [sock]);
+
   const handleJoin = useCallback(
     async (opts: { code: string; name: string; skin: SkinId }) => {
       try {
@@ -357,7 +368,12 @@ export default function GameClient() {
           </div>
         </div>
 
-        <RoleBadge role={role} onConnectWallet={connectWallet} />
+        <RoleBadge
+          role={role}
+          walletAddress={wallet}
+          onConnectWallet={connectWallet}
+          onDisconnectWallet={disconnectWallet}
+        />
       </header>
 
       <TaskList
@@ -571,6 +587,7 @@ export default function GameClient() {
           contractAddress={PARASITE_GAME_ADDRESS}
           walletAddress={wallet}
           onConnectWallet={connectWallet}
+          onDisconnectWallet={disconnectWallet}
           onJoin={handleJoin}
           onStart={() => sock.startGame()}
         />

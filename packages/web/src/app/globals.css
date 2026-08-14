@@ -277,6 +277,38 @@ button:disabled {
   color: var(--warn);
 }
 
+.role-badge.has-wallet {
+  padding-right: 6px;
+}
+
+/* Small secondary control, not a primary action, so it does not chase the
+   44px hit-area floor the in-game action buttons use — but it still gets
+   enough padding to be tappable on a phone without a mis-tap. */
+.role-disconnect {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.role-disconnect:hover,
+.role-disconnect:focus-visible {
+  background: rgba(255, 95, 126, 0.12);
+  border-color: var(--danger-dim);
+  color: var(--danger);
+}
+
 /* ── Buttons ───────────────────────────────────────────────────────────────── */
 
 /* min-height is the 44px hit-area floor: these are the primary in-game controls
