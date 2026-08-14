@@ -326,7 +326,7 @@ export class MainScene extends Phaser.Scene {
     // Left at its default, Phaser calls preventDefault() on these keys
     // globally, and W/A/S/D never reached a focused text field — a player
     // could not type those letters into their own name. "Solo" arrived as
-    // "olo", "Okafor" as "Okfor". The game polls `isDown`, so it needs the
+    // "olo", "Wraith" as "raith". The game polls `isDown`, so it needs the
     // key state, not the capture, and the page does not scroll.
     this.keys = {
       W: kb.addKey('W', false),
@@ -346,7 +346,7 @@ export class MainScene extends Phaser.Scene {
      * KeyboardManager keeps its own capture list and its own `preventDefault`
      * flag, and that is what was actually swallowing the keys. Until this,
      * a player could not type W, A, S or D into their own name or the outpost
-     * code — "Solo" arrived as "olo", "Okafor" as "Okfor", and every dropped
+     * code — "Solo" arrived as "olo", "Wraith" as "raith", and every dropped
      * character was one of those four.
      *
      * The game polls `isDown` each frame, so it needs the key *state*, never

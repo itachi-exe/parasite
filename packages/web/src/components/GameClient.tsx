@@ -374,7 +374,7 @@ export default function GameClient() {
           arrows globally, and no combination of addKey(enableCapture=false),
           clearCaptures() or manager.preventDefault would stop it — so while
           the lobby was open those four letters never reached the name or
-          outpost-code fields. "Solo" arrived as "olo", "Okafor" as "Okfor".
+          outpost-code fields. "Solo" arrived as "olo", "Wraith" as "raith".
           Not mounting the game under a screen that is asking the player to
           type is both the fix and the more sensible arrangement: the title
           screen draws its own canvas and has no use for a game loop.

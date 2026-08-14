@@ -280,7 +280,7 @@ function JoinSheet(props: {
             id="lobby-name"
             value={props.name}
             maxLength={16}
-            placeholder="Dr. Okafor"
+            placeholder="Dr. Cipher"
             autoComplete="off"
             aria-describedby="lobby-name-help"
             onChange={(e) => props.onName(e.target.value)}
