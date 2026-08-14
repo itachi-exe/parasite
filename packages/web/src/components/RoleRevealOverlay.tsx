@@ -58,7 +58,7 @@ export default function RoleRevealOverlay({ onDone }: { onDone: () => void }) {
         <span className="role-reveal-eyebrow">infection detected</span>
         <h1 className="role-reveal-title">YOU ARE THE PARASITE</h1>
         <p className="role-reveal-sub">
-          Nobody else knows — not even whoever infected you. Move carefully.
+          Nobody else knows. Not even whoever infected you. Move carefully.
         </p>
       </div>
     </div>

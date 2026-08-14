@@ -273,7 +273,7 @@ function ResultView(props: {
 
       {roleMode === 'inco' && (
         <div className="mono-note">
-          This single bit — &ldquo;was this seat the host?&rdquo; — is the only role
+          This single bit, &ldquo;was this seat the host?&rdquo;, is the only role
           information the contract ever reveals during play. It is computed as
           <code> e.eq(hostSeat, ejectedSeat)</code> and published with
           <code> e.reveal</code>. The host seat itself stays encrypted, so a

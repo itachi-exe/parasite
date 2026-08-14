@@ -439,7 +439,7 @@ export default function GameClient() {
           aria-label={
             nearestTask
               ? `Use ${TASK_DEFS.find((t) => t.id === nearestTask)!.name}`
-              : 'Use — walk to a task station first'
+              : 'Walk to a task station to use it'
           }
           onClick={() => nearestTask && setOpenTask(nearestTask)}
         >
@@ -452,7 +452,7 @@ export default function GameClient() {
           className="btn btn-danger"
           disabled={nearestBody === null || phase !== 'playing'}
           aria-label={
-            nearestBody === null ? 'Report — no body nearby' : 'Report the body'
+            nearestBody === null ? 'No body nearby to report' : 'Report the body'
           }
           onClick={() => nearestBody !== null && sock.reportBody(nearestBody)}
         >
@@ -499,7 +499,7 @@ export default function GameClient() {
               ? `Jump recharging, ${Math.ceil(jumpCooldownRemaining / 1000)} seconds left`
               : nearestPlayer && nearestPlayer.d <= JUMP_RANGE
                 ? `Jump into ${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name ?? 'the nearest scientist'}`
-                : 'Jump — nobody in range'
+                : 'Nobody in range to jump'
           }
           onClick={doJump}
         >
@@ -534,7 +534,7 @@ export default function GameClient() {
           aria-label={
             nearestPlayer && nearestPlayer.d <= PURGE_RANGE
               ? `Purge ${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name ?? 'the nearest scientist'}`
-              : 'Purge — nobody in range'
+              : 'Nobody in range to purge'
           }
           onClick={doPurge}
         >

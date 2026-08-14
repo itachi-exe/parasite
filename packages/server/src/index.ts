@@ -39,10 +39,10 @@ http.listen(PORT, HOST, () => {
   const mode = CONTRACT ? 'INCO (on-chain encrypted roles)' : 'SIMULATED (no contract configured)';
   console.log(`
   ┌──────────────────────────────────────────────────────────┐
-  │  PARASITE — game server                                  │
+  │  PARASITE: game server                                    │
   └──────────────────────────────────────────────────────────┘
   listening   http://${HOST}:${PORT}
-  players     ${MIN_PLAYERS}–${MAX_PLAYERS}
+  players     ${MIN_PLAYERS} to ${MAX_PLAYERS}
   role mode   ${mode}
   ${CONTRACT ? `contract    ${CONTRACT}` : ''}
 ${

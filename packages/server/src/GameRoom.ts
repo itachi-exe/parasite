@@ -183,7 +183,7 @@ export class GameRoom {
   ): { result: ActionResult; player?: RoomPlayer } {
     if (this.phase !== 'lobby') {
       return {
-        result: fail('Game already in progress — you can only join from the lobby.'),
+        result: fail('Game already in progress. You can only join from the lobby.'),
       };
     }
     if (this.players.size >= MAX_PLAYERS) {
@@ -755,7 +755,7 @@ export class GameRoom {
         gameId: this.chainGameId,
         callerSeat: p.seat,
         targetSeat,
-        decoy: false, // unused by LocalRoleOracle — kept for interface symmetry with Inco
+        decoy: false, // unused by LocalRoleOracle, kept for interface symmetry with Inco
       });
     }
     return OK;

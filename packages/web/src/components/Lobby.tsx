@@ -133,7 +133,7 @@ export default function Lobby(props: {
           />
 
           <p className="mono-note">
-            Once the expedition launches, <strong>the outpost seals</strong> — nobody
+            Once the expedition launches, <strong>the outpost seals</strong>. Nobody
             topside can join, and nobody down here leaves the surface.
           </p>
         </div>
