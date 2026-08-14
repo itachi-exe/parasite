@@ -328,8 +328,8 @@ export class GameRoom {
 
   /** Names drawn in order so a lobby does not show "Bot 1, Bot 2". */
   private static readonly BOT_NAMES = [
-    'Adeyemi', 'Novak', 'Sato', 'Okonkwo', 'Rivera',
-    'Haddad', 'Lindqvist', 'Mensah', 'Petrov', 'Duarte',
+    'Cipher', 'Glitch', 'Wraith', 'Havoc', 'Vortex',
+    'Nullbyte', 'Ghost', 'Shade', 'Phantom', 'Static',
   ];
 
   /** Seats currently held by bots. */
