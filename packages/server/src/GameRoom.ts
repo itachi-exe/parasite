@@ -720,10 +720,21 @@ export class GameRoom {
    *
    * This deliberately reveals nothing. It is called by every client — the real
    * Parasite and the decoys alike — and returns the same answers to all of them.
-   * The actual identity transfer happens on-chain in ParasiteGame.jump(); the
-   * server never learns whether this call corresponded to a real jump.
+   *
+   * In Inco mode the actual identity transfer happens on-chain in
+   * ParasiteGame.jump(); the server never learns whether this call corresponded
+   * to a real jump, and nothing below changes that.
+   *
+   * In simulated mode there is no chain — the room's LocalRoleOracle IS the
+   * mechanism, and it already mirrors the contract's own select-based no-op
+   * (see roleOracle.ts: both outcomes are computed, decoy and real calls take
+   * the identical path). Calling it here does not leak who the caller is; the
+   * server already privately knows the host in this mode, same as it does at
+   * game start. Whoever the CURRENT host is after the call gets re-told via
+   * deliverSimulatedRoles in the socket handler — for a decoy this is a no-op
+   * re-emit of the same value everyone already has.
    */
-  jumpAnnounce(id: PlayerId, targetSeat: Seat): ActionResult {
+  async jumpAnnounce(id: PlayerId, targetSeat: Seat): Promise<ActionResult> {
     const p = this.players.get(id);
     if (!p) return fail('Not in this game.');
     if (this.phase !== 'playing') return fail('Not during a meeting.');
@@ -738,6 +749,15 @@ export class GameRoom {
     const now = this.now();
     if (now - p.lastJumpAt < JUMP_COOLDOWN_MS) return fail('Jump is still recharging.');
     p.lastJumpAt = now;
+
+    if (this.roleMode === 'simulated' && this.localOracle && this.chainGameId) {
+      await this.localOracle.jump({
+        gameId: this.chainGameId,
+        callerSeat: p.seat,
+        targetSeat,
+        decoy: false, // unused by LocalRoleOracle — kept for interface symmetry with Inco
+      });
+    }
     return OK;
   }
 

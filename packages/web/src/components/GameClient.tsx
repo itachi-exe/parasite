@@ -8,6 +8,7 @@ import {
   TASK_STATIONS,
   TASK_INTERACT_RADIUS,
   JUMP_RANGE,
+  JUMP_COOLDOWN_MS,
   PURGE_RANGE,
   PURGE_COOLDOWN_MS,
   REPORT_BODY_RADIUS,
@@ -32,6 +33,7 @@ import MiniMap from './MiniMap';
 import GameStage from './GameStage';
 import RoleBadge from './RoleBadge';
 import EndOverlay from './EndOverlay';
+import RoleRevealOverlay from './RoleRevealOverlay';
 
 /**
  * Top-level game client. Owns composition and the local-only concerns
@@ -46,9 +48,40 @@ export default function GameClient() {
   const [myTasksDone, setMyTasksDone] = useState<TaskId[]>([]);
   const [showMap, setShowMap] = useState(true);
   const [jumping, setJumping] = useState(false);
+  // A reveal "key": null hides the overlay, any other value shows it — keyed
+  // so a second reveal (jump away then jump back) forces a fresh mount and
+  // replays the sound rather than being a no-op state update.
+  const [reveal, setReveal] = useState<number | null>(null);
   const purgeAttemptAt = useRef(0);
+  const jumpAttemptAt = useRef(0);
+  // Re-render on a slow tick so the cooldown countdown below actually counts
+  // down — a ref alone (jumpAttemptAt) never triggers a re-render by itself.
+  // Seeded with Date.now() (not 0): with jumpAttemptAt still at its initial 0
+  // ("never pressed"), a 0 seed would make (0 - 0) compute as "cooldown just
+  // started," disabling Jump before anyone had ever pressed it.
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const { state, mySeat, positions } = sock;
+
+  useEffect(() => {
+    if (state?.phase !== 'playing') return;
+    const id = setInterval(() => setNowTick(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [state?.phase]);
+
+  /**
+   * Time left on THIS player's own jump cooldown — shown identically to
+   * every player regardless of role (same discipline as the button's
+   * visibility and disabled-state: nothing here differs for the real
+   * Parasite vs. a decoy presser, or it would leak who is who). Answers the
+   * playtest ask for a visible "recharging Ns" readout without adding any
+   * new information a player didn't already have — everyone already knows
+   * when THEY last pressed the button.
+   */
+  const jumpCooldownRemaining = Math.max(
+    0,
+    JUMP_COOLDOWN_MS - (nowTick - jumpAttemptAt.current)
+  );
 
   const { role, submitJump, submitPurgeAttempt, readEjectionReveal } = useRole({
     state,
@@ -56,6 +89,11 @@ export default function GameClient() {
     address: wallet,
     simulatedRole: sock.simulatedRole,
     onToast: sock.pushToast,
+    onRoleReveal: useCallback(() => setReveal(Date.now()), []),
+    onRoleLost: useCallback(
+      () => sock.pushToast('info', 'You are no longer the Parasite.'),
+      [sock]
+    ),
   });
 
   const isParasite = role.isParasite === true;
@@ -187,6 +225,14 @@ export default function GameClient() {
       sock.pushToast('warn', 'Nobody in range to jump into.');
       return;
     }
+    const now = Date.now();
+    if (now - jumpAttemptAt.current < JUMP_COOLDOWN_MS) {
+      sock.pushToast('warn', 'Jump is still recharging.');
+      return;
+    }
+    // Set optimistically, same pattern as Purge's cooldown ref: a second
+    // press landing during the awaited call below must not slip past it.
+    jumpAttemptAt.current = now;
     setJumping(true);
     try {
       // Server-side cooldown check first, so a rejected jump does not cost gas.
@@ -199,10 +245,10 @@ export default function GameClient() {
         await submitJump(nearestPlayer.seat, false);
         sock.pushToast('info', 'Jump submitted to Inco. You are now in their body.');
       } else {
-        sock.pushToast(
-          'warn',
-          'SIMULATED MODE: the jump is not on-chain and host transfer is not applied.'
-        );
+        // Same neutral copy regardless of whether this press was the real
+        // jump or a decoy — the server already applied the transfer (or
+        // no-op) and re-sent roles via 'simulatedRole'.
+        sock.pushToast('info', 'Jump attempted.');
       }
     } catch (err) {
       sock.pushToast('error', err instanceof Error ? err.message : 'Jump failed.');
@@ -443,19 +489,28 @@ export default function GameClient() {
             phase !== 'playing' ||
             !me?.alive ||
             jumping ||
+            jumpCooldownRemaining > 0 ||
             !nearestPlayer ||
             nearestPlayer.d > JUMP_RANGE
           }
           aria-busy={jumping}
           aria-label={
-            nearestPlayer && nearestPlayer.d <= JUMP_RANGE
-              ? `Jump into ${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name ?? 'the nearest scientist'}`
-              : 'Jump — nobody in range'
+            jumpCooldownRemaining > 0
+              ? `Jump recharging, ${Math.ceil(jumpCooldownRemaining / 1000)} seconds left`
+              : nearestPlayer && nearestPlayer.d <= JUMP_RANGE
+                ? `Jump into ${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name ?? 'the nearest scientist'}`
+                : 'Jump — nobody in range'
           }
           onClick={doJump}
         >
           <span className="ico" aria-hidden="true">⇌</span>
-          <span aria-hidden="true">{jumping ? '…' : 'JUMP'}</span>
+          <span aria-hidden="true">
+            {jumping
+              ? '…'
+              : jumpCooldownRemaining > 0
+                ? `${Math.ceil(jumpCooldownRemaining / 1000)}s`
+                : 'JUMP'}
+          </span>
           <span className="key" aria-hidden="true">F</span>
         </button>
 
@@ -546,6 +601,10 @@ export default function GameClient() {
       )}
 
       {sock.end && <EndOverlay end={sock.end} players={state?.players ?? []} />}
+
+      {reveal !== null && (
+        <RoleRevealOverlay key={reveal} onDone={() => setReveal(null)} />
+      )}
 
       {/*
         Toasts carry the only feedback for a refused jump, a kick, or a purge —

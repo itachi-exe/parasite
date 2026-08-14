@@ -190,11 +190,17 @@ export class GameServer {
         void this.flush(room, emits);
       });
 
-      socket.on('jumpAnnounce', (payload, ack) => {
+      socket.on('jumpAnnounce', async (payload, ack) => {
         const room = this.roomOf(socket);
         if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
         // Returns the same answer for real jumps and decoys.
-        ack?.(room.jumpAnnounce(socket.id, payload.targetSeat));
+        const result = await room.jumpAnnounce(socket.id, payload.targetSeat);
+        ack?.(result);
+        // Simulated mode only: re-tell everyone their current role. For a
+        // decoy (or an Inco-mode call, where this is a no-op) it re-sends the
+        // same value nobody notices; for a real transfer it is the only path
+        // that tells the new host they are now the Parasite.
+        if (result.ok) await this.deliverSimulatedRoles(room);
       });
 
       socket.on('submitEjectionReveal', (payload, ack) => {

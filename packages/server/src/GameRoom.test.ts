@@ -387,13 +387,13 @@ describe('GameRoom — jump announce (public side only)', () => {
     const pb = room.players.get('p1')!;
     pb.x = pa.x + JUMP_RANGE / 2;
     pb.y = pa.y;
-    expect(room.jumpAnnounce('p0', 1).ok).toBe(true);
+    expect((await room.jumpAnnounce('p0', 1)).ok).toBe(true);
 
     const pc = room.players.get('p2')!;
     const pd = room.players.get('p3')!;
     pd.x = pc.x + JUMP_RANGE / 2;
     pd.y = pc.y;
-    expect(room.jumpAnnounce('p2', 3).ok).toBe(true);
+    expect((await room.jumpAnnounce('p2', 3)).ok).toBe(true);
   });
 
   it('rejects out-of-range announces', async () => {
@@ -402,7 +402,7 @@ describe('GameRoom — jump announce (public side only)', () => {
     const pb = room.players.get('p1')!;
     pb.x = pa.x + JUMP_RANGE * 4;
     pb.y = pa.y;
-    expect(room.jumpAnnounce('p0', 1).ok).toBe(false);
+    expect((await room.jumpAnnounce('p0', 1)).ok).toBe(false);
   });
 
   it('enforces the jump cooldown', async () => {
@@ -413,17 +413,47 @@ describe('GameRoom — jump announce (public side only)', () => {
       t.x = pa.x + JUMP_RANGE / 2;
       t.y = pa.y;
     }
-    expect(room.jumpAnnounce('p0', 1).ok).toBe(true);
-    expect(room.jumpAnnounce('p0', 2).ok).toBe(false);
+    expect((await room.jumpAnnounce('p0', 1)).ok).toBe(true);
+    expect((await room.jumpAnnounce('p0', 2)).ok).toBe(false);
     clock.advance(25_000);
-    expect(room.jumpAnnounce('p0', 2).ok).toBe(true);
+    expect((await room.jumpAnnounce('p0', 2)).ok).toBe(true);
   });
 
   it('rejects jumping to self or to a corpse', async () => {
     const { room } = await playing();
-    expect(room.jumpAnnounce('p0', 0).ok).toBe(false);
+    expect((await room.jumpAnnounce('p0', 0)).ok).toBe(false);
     room.bySeat(1)!.alive = false;
-    expect(room.jumpAnnounce('p0', 1).ok).toBe(false);
+    expect((await room.jumpAnnounce('p0', 1)).ok).toBe(false);
+  });
+
+  it('a REAL jump (called by the current host) actually transfers hostSeat in simulated mode', async () => {
+    const { room } = await playing();
+    // makeRoom's deterministic RNG (rng => 0) always seats the parasite at 0.
+    expect(await room.readRoleForSeat(0)).toBe(true);
+    expect(await room.readRoleForSeat(1)).toBe(false);
+
+    const pa = room.players.get('p0')!;
+    const pb = room.players.get('p1')!;
+    pb.x = pa.x + JUMP_RANGE / 2;
+    pb.y = pa.y;
+    expect((await room.jumpAnnounce('p0', 1)).ok).toBe(true);
+
+    expect(await room.readRoleForSeat(0)).toBe(false);
+    expect(await room.readRoleForSeat(1)).toBe(true);
+  });
+
+  it('a DECOY jump (called by a non-host) is a no-op on hostSeat in simulated mode', async () => {
+    const { room } = await playing();
+    const pb = room.players.get('p1')!;
+    const pc = room.players.get('p2')!;
+    pc.x = pb.x + JUMP_RANGE / 2;
+    pc.y = pb.y;
+    // p1 is not the host (seat 0 is), so this call must be accepted (same
+    // public answer as a real jump) but change nothing about who is host.
+    expect((await room.jumpAnnounce('p1', 2)).ok).toBe(true);
+
+    expect(await room.readRoleForSeat(0)).toBe(true);
+    expect(await room.readRoleForSeat(2)).toBe(false);
   });
 });
 

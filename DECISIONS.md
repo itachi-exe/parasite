@@ -608,6 +608,78 @@ unprevented but now forensically provable. Both are disclosed here and in
 
 ---
 
+## Real playtest fixes: role-change notification, reveal moment, cooldown UI (2026-08-14)
+
+First real human playtest of the build (multiple phones + one remote player)
+surfaced a genuine, serious bug: a player who becomes the new Parasite via a
+mid-game Jump was **never told**. They kept playing as if still human. Traced
+to two independent root causes, one per mode:
+
+**Simulated mode** — worse than a missing notification: the role transfer
+itself never happened. `GameRoom.jumpAnnounce()` validated proximity/cooldown
+and returned `OK`, but never called `LocalRoleOracle.jump()` — so `hostSeat`
+never moved server-side, and `deliverSimulatedRoles()` (the only thing that
+ever emits `'simulatedRole'`) was wired to `startGame` alone, never re-run
+after a jump. The client even carried a "SIMULATED MODE: host transfer is not
+applied" warning — an intentional stub that outlived its own disclosure.
+Fixed: `jumpAnnounce` now calls the oracle (still role-blind — a decoy and a
+real jump take the identical code path server-side, exactly mirroring the
+contract's own `e.select` no-op discipline, so the server does not learn
+anything from *which* caller invoked it); the socket handler re-runs
+`deliverSimulatedRoles` after every jump, so both the new host (`true`) and
+the outgoing one (`false`) get a fresh, correct `'simulatedRole'` event.
+Proven with two new tests: a unit-level one (`GameRoom.test.ts`) asserting
+`hostSeat` actually moves on a real jump and doesn't on a decoy, and a real
+Socket.io wire-level test (`GameServer.test.ts`) that connects real clients,
+performs a real jump, and asserts both ends receive the corrected event.
+
+**Inco mode** — the one-shot decrypt effect (`useRole.ts`) only ever ran once
+per `chainGameId`, so the *receiving* end of a transfer had no trigger to
+re-check. Not fixable by decrypting on every on-chain `Jumped` event: decoy
+jump traffic already fires from every living player every 25–60s, and
+`attestedDecrypt` requires a fresh EIP-712 wallet signature every call (not
+cacheable) — wiring a decrypt to each event would mean a wallet popup every
+few seconds for everyone. Fixed with an independent, slower poll
+(`ROLE_RECHECK_MS = 45s`) that only runs while a client is not already known
+to be the Parasite. Honest trade-off, stated in code: a new Inco-mode host
+can take up to 45s to find out, and pays one extra signature prompt per
+interval until they do — the cost of decoys and real jumps staying
+indistinguishable on-chain.
+
+**New: unmissable role-reveal moment.** The quiet `RoleBadge` update was not
+enough — direct playtest feedback ("you should know you're the parasite").
+Added `RoleRevealOverlay` (full-screen, high z-index, click/Escape/Enter to
+dismiss, auto-dismisses after ~3.5s) plus a procedurally synthesized "creepy"
+sting (`lib/sfx.ts`, Web Audio API — two detuned sawtooth oscillators beating
+against each other over a descending sub-bass drop; no external audio asset,
+consistent with the rest of the build). Edge-triggered off a single piece of
+state (`useRole`'s `role.isParasite`) so both modes funnel through the same
+trigger without duplicating the detection logic — fires once on every
+HUMAN/unknown → PARASITE transition (game start or a mid-game jump landing on
+this client), never the reverse (losing the role just gets a quiet toast).
+
+**New: visible jump cooldown.** Requested as "count down 30, 29, 28…" —
+deliberately implemented as *the presser's own local cooldown*, shown
+identically to every player regardless of role (same discipline as the
+button's existing role-blind visibility/disabled-state), not a forced/
+automatic jump — a forced-jump interpretation would have been a much bigger,
+riskier mechanic change this close to the deadline and was not what was
+asked. The JUMP button now shows a live "Ns" countdown and disables itself
+locally during the 20s cooldown, avoiding a pointless round trip to the
+server for a press that would just be refused. Verified live against the
+running app (not just build/type-check): pressed once, confirmed the label
+went `JUMP → 20s → 16s` (exact arithmetic match after 4s elapsed), confirmed
+clicking the disabled button during cooldown is a true no-op, and confirmed
+it re-enables to `JUMP` with a fresh valid target at the 20s mark.
+
+**Not done this pass, explicitly scoped out:** an overall round timer. Only
+ever a "maybe" in the request, and every win condition in this codebase is
+already tested; touching that path this close to the deadline for a
+nice-to-have wasn't worth the risk. Flagging here rather than silently
+dropping it — worth a follow-up if there's time.
+
+---
+
 *Original entry, 2026-08-13:*
 
 - `GameRoom.purge()` checks phase, liveness, cooldown, range, self-targeting

@@ -5,8 +5,8 @@ is encrypted on-chain and the game server cannot read it.**
 
 | | |
 |---|---|
-| **Play** | `<DOMAIN>` |
-| **Contract** | [`0x9013FEFb791591D644088C0618aC922052346619`](https://sepolia.basescan.org/address/0x9013FEFb791591D644088C0618aC922052346619) |
+| **Play** | [speak-complexity-characteristics-sugar.trycloudflare.com](https://speak-complexity-characteristics-sugar.trycloudflare.com/) — ephemeral Cloudflare quick tunnel, no custom domain was set up for this submission |
+| **Contract** | [`0xe304aCd0DFdAe69B5480b7caB45c412dd45A04C6`](https://sepolia.basescan.org/address/0xe304aCd0DFdAe69B5480b7caB45c412dd45A04C6) |
 | **Chain** | Base Sepolia (84532) |
 | **Inco Lightning** | `0xe9CB49A5b16C6D4a093E5900AA8b450FD40541B6` |
 | **Players** | 4–10 |
@@ -75,7 +75,7 @@ attempted — see `DECISIONS.md` for the full reasoning on both parts.
 
 ## Two minutes: what to try
 
-1. Open `<DOMAIN>` and press **Play**. Pick a name, keep the outpost code, join.
+1. Open the play link above and press **Play**. Pick a name, keep the outpost code, join.
 2. Open the same link in a few more tabs and join with the same code. Four
    players minimum. Press **Begin the expedition** from the first tab.
 3. Top-left badge reads **CONNECT WALLET** in Inco mode — tap it, connect a

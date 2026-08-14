@@ -89,7 +89,7 @@ npm run deploy:baseSepolia
 
 | | |
 |---|---|
-| Contract | [`0x9013FEFb791591D644088C0618aC922052346619`](https://sepolia.basescan.org/address/0x9013FEFb791591D644088C0618aC922052346619) |
+| Contract | [`0xe304aCd0DFdAe69B5480b7caB45c412dd45A04C6`](https://sepolia.basescan.org/address/0xe304aCd0DFdAe69B5480b7caB45c412dd45A04C6) |
 | Chain | Base Sepolia (84532) |
 | Inco Lightning | `0xe9CB49A5b16C6D4a093E5900AA8b450FD40541B6` |
 

@@ -4,7 +4,13 @@ import { Server } from 'socket.io';
 import { io as ioc, type Socket } from 'socket.io-client';
 import { AddressInfo } from 'node:net';
 import { GameServer } from './GameServer.js';
-import { MIN_PLAYERS, MAX_PLAYERS, TASK_STATIONS, TASK_INTERACT_RADIUS } from '@parasite/shared';
+import {
+  MIN_PLAYERS,
+  MAX_PLAYERS,
+  TASK_STATIONS,
+  TASK_INTERACT_RADIUS,
+  JUMP_RANGE,
+} from '@parasite/shared';
 
 /**
  * End-to-end transport test: real Socket.io clients against the real
@@ -230,6 +236,64 @@ describe('GameServer (socket integration)', () => {
     await new Promise((r) => setTimeout(r, 150));
     const resolved = states.filter((s) => s.phase === 'playing' && s.meeting === null);
     expect(resolved.length).toBeGreaterThan(0);
+
+    for (const s of clients) s.disconnect();
+  });
+
+  /**
+   * The bug reported from a real playtest: a player who becomes the new
+   * Parasite host via a mid-game jump was never told. deliverSimulatedRoles
+   * only ever ran once, right after startGame — jumpAnnounce accepted the
+   * call and enforced its public rules but never touched the room's role
+   * oracle or re-notified anyone. This drives the fix over the real wire:
+   * real sockets, a real jump from whoever the actual host turns out to be,
+   * and asserts BOTH ends of the transfer get a fresh 'simulatedRole' event.
+   */
+  it('notifies the new host — and un-notifies the old one — after a real mid-game jump', async () => {
+    const ROOM = 'JUMPNOTIFY';
+    const roles = new Map<string, boolean>();
+    const clients: Socket[] = [];
+
+    for (let i = 0; i < MIN_PLAYERS; i++) {
+      const s = connect();
+      s.on('simulatedRole' as any, (p: { isParasite: boolean }) => roles.set(s.id!, p.isParasite));
+      const ack = await join(s, `J${i}`, ROOM);
+      expect(ack.ok).toBe(true);
+      clients.push(s);
+    }
+
+    const host = clients[0]!;
+    const started = await new Promise<any>((res) => host.emit('startGame', res));
+    expect(started.ok).toBe(true);
+    // Let every 'simulatedRole' delivered at game start land.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(roles.size).toBe(MIN_PLAYERS);
+
+    const room = game.roomFor(ROOM)!;
+    const parasiteSocketId = [...roles.entries()].find(([, isP]) => isP)?.[0];
+    expect(parasiteSocketId).toBeDefined();
+    const parasiteClient = clients.find((c) => c.id === parasiteSocketId)!;
+    const parasitePlayer = [...room.players.values()].find((p) => p.id === parasiteSocketId)!;
+    const targetPlayer = [...room.players.values()].find((p) => p.id !== parasiteSocketId)!;
+
+    // Put them in range and clear the roles map so the post-jump emissions
+    // are unambiguous (only real changes need to arrive for this assertion;
+    // a same-value re-emit for everyone else is fine and expected).
+    targetPlayer.x = parasitePlayer.x + JUMP_RANGE / 2;
+    targetPlayer.y = parasitePlayer.y;
+    roles.clear();
+
+    const jumpAck = await new Promise<any>((res) =>
+      parasiteClient.emit('jumpAnnounce', { targetSeat: targetPlayer.seat }, res)
+    );
+    expect(jumpAck.ok, jumpAck.error).toBe(true);
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(roles.get(parasitePlayer.id)).toBe(false);
+    expect(roles.get(targetPlayer.id)).toBe(true);
+    // And the room's own authoritative state agrees.
+    expect(await room.readRoleForSeat(parasitePlayer.seat)).toBe(false);
+    expect(await room.readRoleForSeat(targetPlayer.seat)).toBe(true);
 
     for (const s of clients) s.disconnect();
   });

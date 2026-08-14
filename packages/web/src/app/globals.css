@@ -903,6 +903,133 @@ button.vote-card:hover:not(:disabled) {
   font-size: 12px;
 }
 
+/* ── Role reveal ───────────────────────────────────────────────────────────── */
+/* The unmissable "you are now the Parasite" moment. Deliberately louder than
+   the quiet RoleBadge it sits alongside — full-bleed, high z-index, opaque
+   near-black rather than the translucent/blurred .overlay treatment used for
+   modals, since this needs to read as an intrusion, not a dialog. */
+
+.role-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgba(20, 6, 4, 0.97) 0%, rgba(2, 1, 1, 0.99) 75%);
+  cursor: pointer;
+  animation: role-reveal-in var(--dur-mid) var(--ease-out);
+}
+
+.role-reveal.closing {
+  animation: role-reveal-out 240ms var(--ease-out) forwards;
+}
+
+.role-reveal-noise {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(124, 255, 79, 0.05) 0px,
+    rgba(124, 255, 79, 0.05) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  animation: role-reveal-flicker 2.4s steps(12) infinite;
+}
+
+.role-reveal-body {
+  position: relative;
+  padding: 0 24px;
+  max-width: 640px;
+}
+
+.role-reveal-eyebrow {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--danger);
+  margin-bottom: 14px;
+}
+
+.role-reveal-title {
+  margin: 0 0 16px;
+  font-size: clamp(32px, 8vw, 64px);
+  letter-spacing: 0.06em;
+  color: var(--parasite);
+  text-shadow:
+    0 0 18px rgba(124, 255, 79, 0.65),
+    0 0 46px rgba(124, 255, 79, 0.35);
+  animation: role-reveal-shake 320ms var(--ease-out) 1;
+}
+
+.role-reveal-sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@keyframes role-reveal-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes role-reveal-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes role-reveal-flicker {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes role-reveal-shake {
+  0% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-3px, 1px);
+  }
+  40% {
+    transform: translate(3px, -1px);
+  }
+  60% {
+    transform: translate(-2px, 0);
+  }
+  80% {
+    transform: translate(2px, 1px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-reveal,
+  .role-reveal.closing,
+  .role-reveal-noise,
+  .role-reveal-title {
+    animation: none;
+  }
+}
+
 .mono-note {
   font-size: 11.5px;
   color: var(--text-dim);

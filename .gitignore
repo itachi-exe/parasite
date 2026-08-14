@@ -31,5 +31,8 @@ __pycache__/
 coverage/
 .probe/
 
+# coding-tool local state — bundled skills etc., not project content
+.claude/
+
 # generated sprites ARE committed on purpose (see scripts/slice-characters.mjs)
 # so the app runs without a build step; the source sheet stays in assets/

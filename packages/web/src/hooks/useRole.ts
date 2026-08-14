@@ -13,6 +13,13 @@ import { decryptMyRole, encryptSeat, revealEjectedSeat, type ChainWalletClient }
 
 export type RoleMode = 'inco' | 'simulated';
 
+/**
+ * How often a non-Parasite client re-checks whether it has become the new
+ * host, in Inco mode. See the "periodically re-check" effect below for why
+ * this can't just be event-triggered off every Jumped log.
+ */
+const ROLE_RECHECK_MS = 45_000;
+
 export interface RoleState {
   mode: RoleMode;
   /** null until the role is known to this client. */
@@ -52,8 +59,14 @@ export function useRole(opts: {
    */
   simulatedRole: boolean | null;
   onToast: (kind: 'info' | 'warn' | 'error', text: string) => void;
+  /** Fires once on every HUMAN/unknown → PARASITE transition (game start or a
+   *  mid-game jump landing on this client) — the trigger for the unmissable
+   *  full-screen reveal, as opposed to the quiet RoleBadge update. */
+  onRoleReveal?: () => void;
+  /** Fires once on every PARASITE → HUMAN transition (jumping away). */
+  onRoleLost?: () => void;
 }) {
-  const { state, mySeat, address, simulatedRole, onToast } = opts;
+  const { state, mySeat, address, simulatedRole, onToast, onRoleReveal, onRoleLost } = opts;
 
   const mode: RoleMode = PARASITE_GAME_ADDRESS ? 'inco' : 'simulated';
   const [role, setRole] = useState<RoleState>({
@@ -63,6 +76,22 @@ export function useRole(opts: {
     busy: false,
     error: null,
   });
+
+  // ── Edge-triggered reveal/lost callbacks ────────────────────────────────────
+  /**
+   * Single source of truth for "did my role just change." Both modes funnel
+   * through the same `role` state above (simulated via the effect below,
+   * Inco via the decrypt effect and the periodic re-check further down), so
+   * watching `role.isParasite` here catches every path without duplicating
+   * the edge-detection in each mode's own effect.
+   */
+  const prevIsParasite = useRef<boolean | null>(null);
+  useEffect(() => {
+    const prev = prevIsParasite.current;
+    prevIsParasite.current = role.isParasite;
+    if (role.isParasite === true && prev !== true) onRoleReveal?.();
+    else if (role.isParasite === false && prev === true) onRoleLost?.();
+  }, [role.isParasite, onRoleReveal, onRoleLost]);
 
   const publicClient = useRef<PublicClient | null>(null);
   const decoyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -151,6 +180,61 @@ export function useRole(opts: {
       cancelled = true;
     };
   }, [chainGameId, mySeat, mode, walletClient, onToast]);
+
+  // ── Inco mode: periodically re-check for a role change while still human ───
+  /**
+   * The one-shot decrypt above only ever runs once per chainGameId, so a
+   * player who becomes the new host mid-game via someone else's jump was
+   * never told — the client that PERFORMS a real jump already re-decrypts
+   * its own role right after (see submitJump below), but the RECEIVING end
+   * of that transfer has no trigger at all otherwise.
+   *
+   * This can't be "re-decrypt on every Jumped event": decryptMyRole calls
+   * attestedDecrypt, which requires a fresh EIP-712 signature every time (the
+   * SDK does not cache), and decoy jump traffic already fires from every
+   * living player every 25-60s — wiring a decrypt to each event would mean a
+   * wallet popup every few seconds for everyone. Instead this polls on its
+   * own slower, independent cadence, and only while this client is not
+   * already known to be the Parasite (someone who already knows they're the
+   * host needs no polling — jumping AWAY from the role is already handled by
+   * submitJump's own post-jump re-check).
+   *
+   * Honest trade-off: a new host can take up to ROLE_RECHECK_MS to find out,
+   * and pays one extra wallet signature prompt per interval until they do.
+   * That's the cost of decoy and real jumps staying indistinguishable
+   * on-chain — the alternative (event-triggered) would be far noisier.
+   */
+  useEffect(() => {
+    if (mode !== 'inco') return;
+    if (!chainGameId || mySeat === null || state?.phase !== 'playing') return;
+    if (role.isParasite !== false) return; // unknown or already Parasite: nothing to poll for
+
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      const wc = walletClient();
+      if (!wc || !publicClient.current || !PARASITE_GAME_ADDRESS) return;
+      try {
+        const isParasite = await decryptMyRole({
+          rpcUrl: BASE_SEPOLIA_RPC,
+          publicClient: publicClient.current,
+          walletClient: wc,
+          contractAddress: PARASITE_GAME_ADDRESS,
+          gameId: BigInt(chainGameId),
+        });
+        if (cancelled || !isParasite) return; // still human: nothing to update
+        setRole((r) => ({ ...r, isParasite: true, status: 'PARASITE' }));
+      } catch {
+        // Silent: this is a background poll, not a user-initiated action —
+        // surfacing an error toast for a routine re-check would be noise.
+      }
+    }, ROLE_RECHECK_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, chainGameId, mySeat, state?.phase, role.isParasite, walletClient]);
 
   // ── Decoy jump traffic ─────────────────────────────────────────────────────
   /**
