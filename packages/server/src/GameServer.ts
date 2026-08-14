@@ -203,6 +203,35 @@ export class GameServer {
         if (result.ok) await this.deliverSimulatedRoles(room);
       });
 
+      /**
+       * Inco mode: the lobby host's own client calls createGame() on the
+       * contract right after the game starts, then reports the resulting id
+       * here. Nothing else in the system ever learns it otherwise — until
+       * this lands, chainGameId stays null and no client can decrypt a role
+       * (see useRole.ts: the decrypt effect requires chainGameId).
+       *
+       * Host-gated and one-shot (rejects once already set) so a stray retry
+       * or a second tab cannot clobber a valid id with a different one.
+       */
+      socket.on('reportChainGameId', (payload, ack) => {
+        const room = this.roomOf(socket);
+        if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
+        if (socket.id !== room.hostId) {
+          return ack?.({ ok: false, error: 'Only the lobby host can report the chain game id.' });
+        }
+        if (room.roleMode !== 'inco') {
+          return ack?.({ ok: false, error: 'Not in Inco mode.' });
+        }
+        if (room.chainGameId) {
+          return ack?.({ ok: false, error: 'Chain game id already set.' });
+        }
+        const id = (payload?.chainGameId ?? '').trim();
+        if (!id) return ack?.({ ok: false, error: 'Missing chain game id.' });
+        room.setChainGameId(id);
+        ack?.({ ok: true });
+        this.broadcastState(room);
+      });
+
       socket.on('submitEjectionReveal', (payload, ack) => {
         const room = this.roomOf(socket);
         if (!room) return ack?.({ ok: false, error: 'Not in a room.' });

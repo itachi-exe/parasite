@@ -192,6 +192,16 @@ export interface ClientToServerEvents {
     payload: { wasParasite: boolean },
     ack: (res: SimpleResult) => void
   ) => void;
+  /**
+   * Inco mode only: the lobby host reports the game id back after its own
+   * client has called createGame() on the contract. Nothing else ever
+   * populates chainGameId in Inco mode, so until this lands every player's
+   * role stays stuck at WAITING forever, not just slow.
+   */
+  reportChainGameId: (
+    payload: { chainGameId: string },
+    ack: (res: SimpleResult) => void
+  ) => void;
   leaveLobby: (ack: (res: SimpleResult) => void) => void;
 }
 

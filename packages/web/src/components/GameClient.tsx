@@ -83,7 +83,7 @@ export default function GameClient() {
     JUMP_COOLDOWN_MS - (nowTick - jumpAttemptAt.current)
   );
 
-  const { role, submitJump, submitPurgeAttempt, readEjectionReveal } = useRole({
+  const { role, submitJump, submitPurgeAttempt, submitCreateGame, readEjectionReveal } = useRole({
     state,
     mySeat,
     address: wallet,
@@ -98,6 +98,55 @@ export default function GameClient() {
 
   const isParasite = role.isParasite === true;
   const me = state?.players.find((p) => p.seat === mySeat) ?? null;
+  const isHost = !!state && !!me && state.hostId === me.id;
+
+  /**
+   * Inco mode, host only: the moment the game leaves the lobby, call
+   * createGame() on-chain and report the resulting id back to the server.
+   *
+   * This is the step that was missing entirely before this fix — nothing
+   * else in the system ever set chainGameId in Inco mode, so every player's
+   * role stayed at WAITING forever. One-shot per game via the ref guard, so
+   * a re-render (or the host's own state updates arriving mid-flight) can't
+   * fire a second createGame() and strand the first one's id.
+   */
+  const createGameAttempted = useRef<string | null>(null);
+  useEffect(() => {
+    if (role.mode !== 'inco' || !isHost || !state || state.phase === 'lobby') return;
+    if (state.chainGameId) return; // already set, by us or a prior attempt
+    const attemptKey = `${state.players.map((p) => p.seat).join(',')}`;
+    if (createGameAttempted.current === attemptKey) return;
+    createGameAttempted.current = attemptKey;
+
+    const players = state.players
+      .filter((p) => !p.isBot && p.address)
+      .sort((a, b) => a.seat - b.seat)
+      .map((p) => p.address as `0x${string}`);
+
+    if (players.length === 0) {
+      sock.pushToast(
+        'error',
+        'No wallet addresses to create the game with. Roles cannot be assigned.'
+      );
+      return;
+    }
+
+    (async () => {
+      try {
+        const gameId = await submitCreateGame(players);
+        const res = await sock.reportChainGameId(gameId);
+        if (!res.ok) {
+          sock.pushToast('error', res.error ?? 'Could not report the chain game id.');
+        }
+      } catch (err) {
+        sock.pushToast(
+          'error',
+          `Could not create the game on-chain: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role.mode, isHost, state?.phase, state?.chainGameId, submitCreateGame]);
 
   const { voice, enableVoice, disableVoice, setTransmitting } = useVoice(
     sock.socket,
@@ -582,7 +631,7 @@ export default function GameClient() {
           state={state}
           connected={sock.connected}
           joined={joined}
-          isHost={!!state && !!me && state.hostId === me.id}
+          isHost={isHost}
           roleMode={role.mode}
           contractAddress={PARASITE_GAME_ADDRESS}
           walletAddress={wallet}

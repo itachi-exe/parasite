@@ -1,7 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createPublicClient, createWalletClient, custom, http, type PublicClient } from 'viem';
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  parseEventLogs,
+  type PublicClient,
+} from 'viem';
 import { baseSepolia } from 'viem/chains';
 import type { RoomState, Seat } from '@parasite/shared';
 import {
@@ -420,7 +427,63 @@ export function useRole(opts: {
     [mode, chainGameId, address, walletClient]
   );
 
-  /** Read the public "was this seat the Parasite" bit after an ejection. */
+  /**
+   * Inco mode, lobby host only: create the game on-chain and return the
+   * resulting game id.
+   *
+   * This is the one step nothing else in the system ever performed — see
+   * GameServer.ts's `reportChainGameId` handler for where the id goes next.
+   * Without it, `chainGameId` stays null forever and no client can ever
+   * decrypt a role: every player's badge sits at WAITING permanently, not
+   * just slowly.
+   *
+   * The contract's `createGame` returns the id as a function return value,
+   * but that return value is only reachable from a *simulated* call — a real
+   * `writeContract` submission gives back a transaction hash, not the return
+   * value. So this waits for the receipt and reads the id back out of the
+   * `GameCreated` event instead, which is the authoritative source either way.
+   */
+  const submitCreateGame = useCallback(
+    async (players: `0x${string}`[]): Promise<string> => {
+      if (mode !== 'inco' || !PARASITE_GAME_ADDRESS || !address) {
+        throw new Error('Not in Inco mode, or no wallet connected.');
+      }
+      const wc = walletClient();
+      if (!wc || !publicClient.current) throw new Error('Wallet not available.');
+
+      const fee = (await publicClient.current.readContract({
+        address: PARASITE_GAME_ADDRESS,
+        abi: PARASITE_GAME_ABI,
+        functionName: 'createFee',
+        args: [BigInt(players.length)],
+      })) as bigint;
+
+      const hash = await wc.writeContract({
+        address: PARASITE_GAME_ADDRESS,
+        abi: PARASITE_GAME_ABI,
+        functionName: 'createGame',
+        args: [players],
+        value: fee,
+        chain: baseSepolia,
+        account: wc.account,
+      });
+
+      const receipt = await publicClient.current.waitForTransactionReceipt({ hash });
+
+      const [created] = parseEventLogs({
+        abi: PARASITE_GAME_ABI,
+        eventName: 'GameCreated',
+        logs: receipt.logs,
+      });
+      const gameId = created?.args?.gameId;
+      if (gameId === undefined) {
+        throw new Error('createGame succeeded on-chain, but no GameCreated event was found.');
+      }
+      return gameId.toString();
+    },
+    [mode, address, walletClient]
+  );
+
   /** Read the public "was this seat the Parasite" bit after an ejection. */
   const readEjectionReveal = useCallback(
     async (seat: Seat): Promise<boolean | null> => {
@@ -442,5 +505,5 @@ export function useRole(opts: {
     [mode, chainGameId]
   );
 
-  return { role, submitJump, submitPurgeAttempt, readEjectionReveal };
+  return { role, submitJump, submitPurgeAttempt, submitCreateGame, readEjectionReveal };
 }

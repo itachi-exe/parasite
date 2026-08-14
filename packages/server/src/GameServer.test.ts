@@ -298,6 +298,18 @@ describe('GameServer (socket integration)', () => {
     for (const s of clients) s.disconnect();
   });
 
+  it('rejects reportChainGameId outside Inco mode', async () => {
+    const ROOM = 'REPORTSIM';
+    const s = connect();
+    await join(s, 'Sim', ROOM);
+    const res = await new Promise<any>((r) =>
+      s.emit('reportChainGameId', { chainGameId: '7' }, r)
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/inco/i);
+    s.disconnect();
+  });
+
   it('surfaces role mode in the state broadcast', async () => {
     const ROOM = 'MODETEST';
     const s = connect();
@@ -306,5 +318,100 @@ describe('GameServer (socket integration)', () => {
     const st = await state;
     expect(st.roleMode).toBe('simulated');
     s.disconnect();
+  });
+});
+
+/**
+ * reportChainGameId, in a real Inco-mode room.
+ *
+ * The bug this closes: nothing in the system ever called this, so
+ * chainGameId stayed null forever and every player's role sat at WAITING
+ * permanently, not just slowly. Needs its own server instance because the
+ * shared one above is fixed to simulated mode.
+ */
+describe('GameServer — reportChainGameId (Inco mode)', () => {
+  let http: ReturnType<typeof createServer>;
+  let game: GameServer;
+  let port: number;
+  const clients: Socket[] = [];
+
+  beforeAll(async () => {
+    http = createServer();
+    const io = new Server(http);
+    // A syntactically-plausible address is all this needs: the server never
+    // actually calls the chain for this feature (by design — it holds no
+    // role oracle in Inco mode), it only stores whatever id the host reports.
+    game = new GameServer(io, {
+      contractAddress: '0x0000000000000000000000000000000000dEaD',
+      positionEveryTicks: 1,
+    });
+    await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve));
+    port = (http.address() as AddressInfo).port;
+  });
+
+  afterAll(() => {
+    game.stop();
+    for (const c of clients) c.disconnect();
+    http.close();
+  });
+
+  function connect(): Socket {
+    const s = ioc(`http://127.0.0.1:${port}`, { transports: ['websocket'], reconnection: false });
+    clients.push(s);
+    return s;
+  }
+
+  async function join(s: Socket, name: string, code: string): Promise<any> {
+    return new Promise((res) => s.emit('join', { code, name, skin: 0, address: null }, res));
+  }
+
+  it('lets the host report the id once, and broadcasts it', async () => {
+    const ROOM = 'INCOREPORT';
+    const host = connect();
+    await join(host, 'Host', ROOM);
+
+    const stateEv = new Promise<any>((resolve) => host.once('state' as any, resolve));
+    const res = await new Promise<any>((r) =>
+      host.emit('reportChainGameId', { chainGameId: '42' }, r)
+    );
+    expect(res.ok, res.error).toBe(true);
+
+    const st = await stateEv;
+    expect(st.chainGameId).toBe('42');
+    host.disconnect();
+  });
+
+  it('rejects a non-host caller', async () => {
+    const ROOM = 'INCOREPORTNOTHOST';
+    const host = connect();
+    const other = connect();
+    await join(host, 'Host', ROOM);
+    await join(other, 'Other', ROOM);
+
+    const res = await new Promise<any>((r) =>
+      other.emit('reportChainGameId', { chainGameId: '1' }, r)
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/host/i);
+    host.disconnect();
+    other.disconnect();
+  });
+
+  it('rejects a second report once the id is already set', async () => {
+    const ROOM = 'INCOREPORTTWICE';
+    const host = connect();
+    await join(host, 'Host', ROOM);
+
+    const first = await new Promise<any>((r) =>
+      host.emit('reportChainGameId', { chainGameId: '5' }, r)
+    );
+    expect(first.ok).toBe(true);
+
+    const second = await new Promise<any>((r) =>
+      host.emit('reportChainGameId', { chainGameId: '999' }, r)
+    );
+    expect(second.ok).toBe(false);
+    expect(second.error).toMatch(/already set/i);
+    host.disconnect();
   });
 });

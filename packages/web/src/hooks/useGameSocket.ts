@@ -51,6 +51,7 @@ export interface UseGameSocket {
   purge: (targetSeat: Seat) => Promise<void>;
   jumpAnnounce: (targetSeat: Seat) => Promise<{ ok: boolean; error?: string }>;
   submitEjectionReveal: (wasParasite: boolean) => void;
+  reportChainGameId: (chainGameId: string) => Promise<{ ok: boolean; error?: string }>;
   pushToast: (kind: Toast['kind'], text: string) => void;
 }
 
@@ -209,6 +210,8 @@ export function useGameSocket(): UseGameSocket {
       emitAck<{ ok: boolean; error?: string }>('jumpAnnounce', { targetSeat }),
     submitEjectionReveal: (wasParasite) =>
       socketRef.current?.emit('submitEjectionReveal', { wasParasite } as never),
+    reportChainGameId: (chainGameId) =>
+      emitAck<{ ok: boolean; error?: string }>('reportChainGameId', { chainGameId }),
     pushToast,
   };
 }
