@@ -127,7 +127,7 @@ additional ABI-drift tests folded into the contracts count of 38).
 
 Everything needing a credential that was not provided is stubbed behind a
 clean seam and marked with a searchable marker. There are **no** code-level
-`TODO(ASHE)` stubs beyond the env scaffolding:
+`TODO` stubs beyond the env scaffolding:
 
 - `.env.example`:
   - `NEXT_PUBLIC_BASE_SEPOLIA_RPC` — public default `https://sepolia.base.org`; set a private endpoint for reliability.

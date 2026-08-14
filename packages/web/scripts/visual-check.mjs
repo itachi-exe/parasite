@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Self-verification screenshot tool for ASHE.
+// Self-verification screenshot tool.
 //
 // Code that looks right in a diff can still render wrong — this project has
 // hit that exact failure mode twice (a rendering bug that 114 protocol-level
@@ -14,14 +14,12 @@
 // look at the image (or sample specific pixels, see DECISIONS.md's GGD
 // lighting-pass entry for an example of pixel-sampling a subtle effect) —
 // but a run that never happens proves nothing at all.
-// Uses full `puppeteer` (bundled Chromium), not `puppeteer-core` against the
-// system's snap-packaged chromium. The snap build genuinely cannot launch as
-// this project's `ashe` user or under systemd-run: its sandboxing requires a
-// real login session (XDG_RUNTIME_DIR/logind), and `ashe` deliberately has
-// none — no SSH, no session, that's part of its hardening. Confirmed by
-// testing directly: `snap.chromium.chromium cgroup` errors under both
-// `sudo -u ashe` and the actual `systemd-run --uid=ashe` shape ASHE runs
-// under. A self-contained Chromium sidesteps the whole problem.
+// Uses full `puppeteer` (bundled Chromium), not `puppeteer-core` against a
+// system-packaged chromium: a snap-confined Chromium build cannot launch
+// under a sandboxed CI/build user with no real login session
+// (XDG_RUNTIME_DIR/logind) — confirmed by testing directly, it errors under
+// both `sudo -u <user>` and a `systemd-run --uid=<user>` invocation. A
+// self-contained Chromium sidesteps the whole problem.
 import puppeteer from 'puppeteer';
 
 const [, , url, outPath, ...rest] = process.argv;

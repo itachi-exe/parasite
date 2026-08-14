@@ -1,7 +1,7 @@
 /**
  * Deploy ParasiteGame to Base Sepolia (or a local Hardhat node).
  *
- * TODO(ASHE): No DEPLOYER_PRIVATE_KEY was provided with this build, so no
+ * TODO: No DEPLOYER_PRIVATE_KEY was provided with this build, so no
  * deployment was performed and NEXT_PUBLIC_PARASITE_GAME_ADDRESS is empty. To
  * finish the deployment you need:
  *
@@ -34,7 +34,7 @@ async function main() {
   if (signers.length === 0) {
     console.error(
       `\n✗ No signer available.\n` +
-        `  TODO(ASHE): set DEPLOYER_PRIVATE_KEY in .env (repo root) to a funded\n` +
+        `  TODO: set DEPLOYER_PRIVATE_KEY in .env (repo root) to a funded\n` +
         `  Base Sepolia account, then re-run:  npm run deploy:baseSepolia\n`
     );
     process.exit(1);
