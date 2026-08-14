@@ -89,6 +89,7 @@ npm run deploy:baseSepolia
 
 | | |
 |---|---|
+| Play | [theparasite.xyz](https://theparasite.xyz) |
 | Contract | [`0xe304aCd0DFdAe69B5480b7caB45c412dd45A04C6`](https://sepolia.basescan.org/address/0xe304aCd0DFdAe69B5480b7caB45c412dd45A04C6) |
 | Chain | Base Sepolia (84532) |
 | Inco Lightning | `0xe9CB49A5b16C6D4a093E5900AA8b450FD40541B6` |
