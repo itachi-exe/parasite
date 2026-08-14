@@ -134,8 +134,7 @@ export default function Lobby(props: {
 
           <p className="mono-note">
             Once the expedition launches, <strong>the outpost seals</strong> — nobody
-            topside can join, and nobody down here leaves the surface. Locked at the
-            server, not just this screen.
+            topside can join, and nobody down here leaves the surface.
           </p>
         </div>
       </div>
