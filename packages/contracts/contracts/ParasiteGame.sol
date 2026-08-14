@@ -92,6 +92,23 @@ contract ParasiteGame {
         mapping(uint256 => bool) ejectionRevealed;
         /// Set once at game over.
         bool hostRevealed;
+        /// Bumped on every purge attempt — real or decoy, same discipline as jumpNonce.
+        uint64 purgeNonce;
+        /// Every purge attempt this game, in order. See "PURGE AUDIT TRAIL" below.
+        PurgeAttempt[] purgeAttempts;
+        bool purgeAuditRevealed;
+    }
+
+    /**
+     * One purge attempt. `caller` is public the same way a Jump's caller is —
+     * "someone sent a tx" leaks nothing. `targetSeat` and `wasHost` stay
+     * encrypted until revealPurgeAudit(), which is only callable after the
+     * game has ended.
+     */
+    struct PurgeAttempt {
+        address caller;
+        euint256 targetSeat;
+        ebool wasHost;
     }
 
     mapping(uint256 => Game) private _games;
@@ -111,6 +128,9 @@ contract ParasiteGame {
     event EjectionRevealRequested(uint256 indexed gameId, uint256 indexed seat);
     event HostRevealed(uint256 indexed gameId);
     event GameEnded(uint256 indexed gameId);
+    /// @dev Identical shape for a real purge and a decoy, exactly like Jumped.
+    event PurgeAttempted(uint256 indexed gameId, address indexed caller, uint64 nonce);
+    event PurgeAuditRevealed(uint256 indexed gameId, uint256 count);
 
     // ── Errors ───────────────────────────────────────────────────────────────
     error BadPlayerCount(uint256 given);
@@ -121,6 +141,7 @@ contract ParasiteGame {
     error SeatOutOfRange(uint256 seat);
     error FeeNotPaid(uint256 provided, uint256 required);
     error AlreadyRevealed();
+    error GameNotEnded(uint256 gameId);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Game creation + encrypted role assignment
@@ -269,6 +290,79 @@ contract ParasiteGame {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // PURGE AUDIT TRAIL
+    // ─────────────────────────────────────────────────────────────────────────
+    //
+    // Purge cannot get Jump's "callable by anyone, real no-op" property, because
+    // a purge's effect is a body appearing IN THE LIVE GAME, synchronised for
+    // the whole room right now — not an invisible chain-state mutation nobody
+    // has to react to. Gating that in real time would mean either the server
+    // learning roles (breaking the premise of Inco mode) or the kill waiting on
+    // an FHE-compute-plus-block-confirmation round trip (breaking the feel of
+    // the mechanic). Neither is acceptable this close to a deadline.
+    //
+    // So this does the other honest thing: every purge attempt, real or decoy,
+    // is committed here with the exact same public shape as a Jump — caller
+    // public, target and outcome encrypted. The live kill still happens
+    // instantly, unauthenticated, exactly as before. What changes is that after
+    // the game ends, revealPurgeAudit() opens every attempt's target and
+    // "was I the host" bit, and it can be checked against the server's public
+    // playerPurged log: an attempt whose live kill landed but whose revealed
+    // wasHost is false is provable cheating. This does not PREVENT an
+    // illegitimate kill; it makes one provable after the fact.
+
+    /**
+     * @notice Record a purge attempt. Callable by anyone, same discipline as
+     * jump(): no branch, no revert, no gas difference between a real purge and
+     * a decoy. The live game's actual kill is driven by the server exactly as
+     * before — this call does not gate it, only records it for later audit.
+     */
+    function attemptPurge(uint256 gameId, bytes memory targetSeatInput) external payable {
+        Game storage g = _games[gameId];
+        if (g.status != Status.Active) revert GameNotActive(gameId);
+
+        uint256 callerSeat = _seatOfOrRevert(g, msg.sender);
+
+        // 1 input + 1 eq + 2 allowThis, plus slack. Same shape as revealEjection.
+        uint256 required = inco.getFee() * 4;
+        if (msg.value < required) revert FeeNotPaid(msg.value, required);
+
+        euint256 targetSeat = e.newEuint256(targetSeatInput, msg.sender);
+        ebool wasHost = e.eq(g.hostSeat, callerSeat);
+        e.allowThis(targetSeat);
+        e.allowThis(wasHost);
+
+        g.purgeAttempts.push(PurgeAttempt({caller: msg.sender, targetSeat: targetSeat, wasHost: wasHost}));
+        g.purgeNonce += 1;
+        emit PurgeAttempted(gameId, msg.sender, g.purgeNonce);
+    }
+
+    /**
+     * @notice Open every purge attempt's target seat and "was host" bit.
+     *
+     * Only callable after the game has ended (i.e. after revealHost()), so it
+     * can never be used mid-round to narrow down the Parasite while the game
+     * is still live — the audit trail is a post-mortem tool, not a live one.
+     */
+    function revealPurgeAudit(uint256 gameId) external payable {
+        Game storage g = _games[gameId];
+        if (g.status != Status.Ended) revert GameNotEnded(gameId);
+        _seatOfOrRevert(g, msg.sender);
+        if (g.purgeAuditRevealed) revert AlreadyRevealed();
+
+        uint256 n = g.purgeAttempts.length;
+        uint256 required = inco.getFee() * n * 2;
+        if (msg.value < required) revert FeeNotPaid(msg.value, required);
+
+        for (uint256 i = 0; i < n; i++) {
+            e.reveal(g.purgeAttempts[i].targetSeat);
+            e.reveal(g.purgeAttempts[i].wasHost);
+        }
+        g.purgeAuditRevealed = true;
+        emit PurgeAuditRevealed(gameId, n);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Sanctioned reveals
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -372,6 +466,35 @@ contract ParasiteGame {
             if (g.seats[i] == who) return (true, i);
         }
         return (false, 0);
+    }
+
+    /// @notice Fee a client should send with `attemptPurge`.
+    function purgeAttemptFee(uint256 /* gameId */) external view returns (uint256) {
+        return inco.getFee() * 4;
+    }
+
+    /// @notice Number of purge attempts recorded for this game.
+    function purgeAttemptCount(uint256 gameId) external view returns (uint256) {
+        return _games[gameId].purgeAttempts.length;
+    }
+
+    /**
+     * @notice Handles for one purge attempt. Only meaningfully decryptable
+     * after revealPurgeAudit() has run — before that the handles exist but
+     * nobody has been granted access to open them.
+     */
+    function purgeAttemptHandles(uint256 gameId, uint256 index)
+        external
+        view
+        returns (address caller, euint256 targetSeat, ebool wasHost)
+    {
+        PurgeAttempt storage a = _games[gameId].purgeAttempts[index];
+        return (a.caller, a.targetSeat, a.wasHost);
+    }
+
+    /// @notice Fee a client should send with `revealPurgeAudit`.
+    function purgeAuditFee(uint256 gameId) external view returns (uint256) {
+        return inco.getFee() * _games[gameId].purgeAttempts.length * 2;
     }
 
     /// @notice Fee a client should send with `jump` for an n-player game.

@@ -66,6 +66,7 @@ export function useRole(opts: {
 
   const publicClient = useRef<PublicClient | null>(null);
   const decoyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const purgeDecoyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastGameId = useRef<string | null>(null);
 
   if (!publicClient.current && typeof window !== 'undefined') {
@@ -194,6 +195,44 @@ export function useRole(opts: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, chainGameId, mySeat, state?.phase, role.isParasite]);
 
+  // ── Decoy purge-attempt traffic ─────────────────────────────────────────────
+  /**
+   * attemptPurge() never causes a kill by itself — the live kill is still
+   * driven entirely by the unauthenticated Socket.io call, exactly as before.
+   * It only WRITES AN AUDIT RECORD. So on its own, sending one only when a real
+   * purge happens would make the caller of that public event the tell: an
+   * observer watching the mempool during the live round would see "address X
+   * just sent attemptPurge" and, since only the real killer ever presses that
+   * button, learn who the Parasite is in real time — before revealPurgeAudit
+   * ever runs, defeating the entire point of sealing the audit until game end.
+   *
+   * Same fix as the decoy Jump traffic: every living player periodically sends
+   * one too. Unlike a decoy Jump, a decoy purge attempt can target literally
+   * anything — attemptPurge never mutates hostSeat, so there is no equivalent
+   * of "a wrongly-aimed decoy is secretly a real action" to avoid. That is what
+   * makes this simpler than the Jump decoy despite doing the same job.
+   */
+  useEffect(() => {
+    if (mode !== 'inco') return;
+    if (!chainGameId || mySeat === null || state?.phase !== 'playing') return;
+    if (role.isParasite === null) return;
+
+    const schedule = () => {
+      const delay = 20_000 + Math.random() * 30_000;
+      purgeDecoyTimer.current = setTimeout(async () => {
+        await submitPurgeAttempt(mySeat, true).catch(() => {});
+        schedule();
+      }, delay);
+    };
+    schedule();
+
+    return () => {
+      if (purgeDecoyTimer.current) clearTimeout(purgeDecoyTimer.current);
+      purgeDecoyTimer.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, chainGameId, mySeat, state?.phase, role.isParasite]);
+
   /**
    * Send a jump transaction.
    *
@@ -252,6 +291,52 @@ export function useRole(opts: {
     [mode, chainGameId, address, walletClient]
   );
 
+  /**
+   * Record a purge attempt on-chain. Never causes a kill and never changes
+   * anyone's role — the live kill is still the pre-existing, instant,
+   * unauthenticated Socket.io call; this only writes the audit record that
+   * lets a cheating client be caught after the fact (see the PURGE AUDIT TRAIL
+   * section in ParasiteGame.sol for the full reasoning).
+   *
+   * `decoy` only affects local UX (whether a failure is surfaced); the
+   * transaction is byte-identical either way, which is the entire point.
+   */
+  const submitPurgeAttempt = useCallback(
+    async (targetSeat: Seat, decoy = false) => {
+      if (mode !== 'inco' || !chainGameId || !PARASITE_GAME_ADDRESS || !address) return;
+      const wc = walletClient();
+      if (!wc || !publicClient.current) return;
+
+      const gameId = BigInt(chainGameId);
+      const ciphertext = await encryptSeat({
+        rpcUrl: BASE_SEPOLIA_RPC,
+        seat: targetSeat,
+        accountAddress: address,
+        dappAddress: PARASITE_GAME_ADDRESS,
+      });
+
+      const fee = (await publicClient.current.readContract({
+        address: PARASITE_GAME_ADDRESS,
+        abi: PARASITE_GAME_ABI,
+        functionName: 'purgeAttemptFee',
+        args: [gameId],
+      })) as bigint;
+
+      await wc.writeContract({
+        address: PARASITE_GAME_ADDRESS,
+        abi: PARASITE_GAME_ABI,
+        functionName: 'attemptPurge',
+        args: [gameId, ciphertext],
+        value: fee,
+        chain: baseSepolia,
+        account: wc.account,
+      });
+      void decoy; // symmetry with submitJump's signature; nothing to branch on
+    },
+    [mode, chainGameId, address, walletClient]
+  );
+
+  /** Read the public "was this seat the Parasite" bit after an ejection. */
   /** Read the public "was this seat the Parasite" bit after an ejection. */
   const readEjectionReveal = useCallback(
     async (seat: Seat): Promise<boolean | null> => {
@@ -273,5 +358,5 @@ export function useRole(opts: {
     [mode, chainGameId]
   );
 
-  return { role, submitJump, readEjectionReveal };
+  return { role, submitJump, submitPurgeAttempt, readEjectionReveal };
 }

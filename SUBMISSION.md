@@ -44,18 +44,32 @@ The one thing the contract *does* reveal is a single derived bit on ejection —
 "was the ejected player the Parasite's host" — via `e.reveal` on a derived
 `ebool`. That is the game's one sanctioned disclosure, and it is the only one.
 
-### Known limitation, stated up front
+### Purge: fixed the leak, disclosed the rest
 
-**Purge is not authorised on-chain.** Jump goes through the contract, so the
-encrypted role is what makes it real or a no-op. Purge does not: the server
-validates range, cooldown and liveness, but cannot check that the caller is
-the Parasite, because in Inco mode it holds no oracle and genuinely cannot
-know. Today only the client hides the button from crew members.
+Two distinct issues, found a day apart.
 
-The correct fix is to route Purge through the contract the same way Jump
-already is. We found this about a day out from the deadline on an otherwise
-working build and judged a contract change plus redeploy too risky to attempt
-then. It is documented rather than hidden — see `DECISIONS.md`.
+**The button used to only render for the Parasite.** That is a bigger leak
+than anything on-chain — a screen-share or a glance between two open tabs
+identified the Parasite instantly, no analysis required. **Fixed:** the
+button now renders for every living player, exactly like Jump, and which of
+two internal code paths runs is decided inside the click handler, never in
+the DOM. Verified live: with every client's role unresolved, all four players
+in a real round see and can press the button, and nobody dies.
+
+**The kill itself still is not authorised on-chain.** Jump can be safely
+callable by anyone because its effect — who currently hosts the Parasite — is
+invisible, a background chain-state mutation nobody has to react to. Purge's
+effect is a body appearing in real time for the whole room; gating that on
+role means either the server learning roles (breaking the premise of Inco
+mode) or the kill taking on FHE-compute-plus-block-confirmation latency
+(changing the feel of the mechanic). Neither was acceptable this close to a
+deadline. Instead, every purge attempt — real or decoy — is now committed
+on-chain in Jump's exact shape (caller public, target and outcome encrypted,
+gas-identical), and opened after the game ends via `revealPurgeAudit()`. This
+does not prevent an unauthorised kill from landing live; it makes one
+provably detectable afterward against the server's public kill log. The
+real-time fix is still the correct long-term answer and is still not
+attempted — see `DECISIONS.md` for the full reasoning on both parts.
 
 ---
 

@@ -9,6 +9,7 @@ import {
   TASK_INTERACT_RADIUS,
   JUMP_RANGE,
   PURGE_RANGE,
+  PURGE_COOLDOWN_MS,
   REPORT_BODY_RADIUS,
   AREAS,
   areaAt,
@@ -45,10 +46,11 @@ export default function GameClient() {
   const [myTasksDone, setMyTasksDone] = useState<TaskId[]>([]);
   const [showMap, setShowMap] = useState(true);
   const [jumping, setJumping] = useState(false);
+  const purgeAttemptAt = useRef(0);
 
   const { state, mySeat, positions } = sock;
 
-  const { role, submitJump, readEjectionReveal } = useRole({
+  const { role, submitJump, submitPurgeAttempt, readEjectionReveal } = useRole({
     state,
     mySeat,
     address: wallet,
@@ -208,6 +210,52 @@ export default function GameClient() {
       setJumping(false);
     }
   }, [nearestPlayer, sock, role.mode, submitJump]);
+
+  /**
+   * Purge.
+   *
+   * Shown to every living player, exactly like Jump — a button that only
+   * appeared for the Parasite would leak the role to anyone glancing at a
+   * screen, streaming, or comparing two open tabs, which defeats the whole
+   * point regardless of anything happening on-chain. Jump can afford to run
+   * the SAME code for everyone because the contract turns a non-Parasite's
+   * jump into a real no-op; Purge has no such safety net, so the real/decoy
+   * split has to happen here instead — a non-Parasite's press must never
+   * reach the live, unauthenticated kill call.
+   *
+   * The two paths are kept deliberately symmetric: same range/cooldown gate
+   * (the cooldown is enforced client-side here, purely so a decoy press
+   * cannot be attempted more often than a real one could — the live server
+   * only enforces it for the real path), same toast copy, same awaited
+   * on-chain call either way. What differs is invisible: whether sock.purge()
+   * — the actual kill — gets called at all.
+   */
+  const doPurge = useCallback(async () => {
+    if (!nearestPlayer || nearestPlayer.d > PURGE_RANGE) {
+      sock.pushToast('warn', 'Nobody in range to purge.');
+      return;
+    }
+    const now = Date.now();
+    if (now - purgeAttemptAt.current < PURGE_COOLDOWN_MS) {
+      sock.pushToast('warn', 'Purge is still recharging.');
+      return;
+    }
+    purgeAttemptAt.current = now;
+
+    try {
+      if (isParasite) {
+        // simpleAction() (see useGameSocket) already surfaces its own error
+        // toast on failure, matching every other action in this file.
+        await sock.purge(nearestPlayer.seat);
+      }
+      if (role.mode === 'inco') {
+        await submitPurgeAttempt(nearestPlayer.seat, !isParasite).catch(() => {});
+      }
+      sock.pushToast('info', 'Purge attempted.');
+    } catch (err) {
+      sock.pushToast('error', err instanceof Error ? err.message : 'Purge failed.');
+    }
+  }, [nearestPlayer, sock, isParasite, role.mode, submitPurgeAttempt]);
 
   // The banner takes names, not seats, so it can be read without the roster.
   const alertPayload: AlertPayload | null = useMemo(() => {
@@ -411,27 +459,34 @@ export default function GameClient() {
           <span className="key" aria-hidden="true">F</span>
         </button>
 
-        {isParasite && (
-          <button
-            className="btn btn-danger"
-            disabled={
-              phase !== 'playing' ||
-              !me?.alive ||
-              !nearestPlayer ||
-              nearestPlayer.d > PURGE_RANGE
-            }
-            aria-label={
-              nearestPlayer && nearestPlayer.d <= PURGE_RANGE
-                ? `Purge ${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name ?? 'the nearest scientist'}`
-                : 'Purge — nobody in range'
-            }
-            onClick={() => nearestPlayer && sock.purge(nearestPlayer.seat)}
-          >
-            <span className="ico" aria-hidden="true">☣</span>
-            <span aria-hidden="true">PURGE</span>
-            <span className="key" aria-hidden="true">Q</span>
-          </button>
-        )}
+        {/*
+          Rendered for EVERY living player, not just the Parasite — same
+          discipline as Jump and for the same reason: a button only the
+          Parasite could see would leak the role to anyone glancing at a
+          screen. The disabled condition below is deliberately role-blind
+          (range/alive/phase only) so the button's enabled state carries no
+          tell either. Which of doPurge's two internal paths actually runs is
+          decided inside the handler, never in this JSX.
+        */}
+        <button
+          className="btn btn-danger"
+          disabled={
+            phase !== 'playing' ||
+            !me?.alive ||
+            !nearestPlayer ||
+            nearestPlayer.d > PURGE_RANGE
+          }
+          aria-label={
+            nearestPlayer && nearestPlayer.d <= PURGE_RANGE
+              ? `Purge ${state?.players.find((p) => p.seat === nearestPlayer.seat)?.name ?? 'the nearest scientist'}`
+              : 'Purge — nobody in range'
+          }
+          onClick={doPurge}
+        >
+          <span className="ico" aria-hidden="true">☣</span>
+          <span aria-hidden="true">PURGE</span>
+          <span className="key" aria-hidden="true">Q</span>
+        </button>
 
         {/*
           The movement hint is gone — every control now carries its own key on a

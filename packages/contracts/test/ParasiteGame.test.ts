@@ -399,6 +399,127 @@ describe('ParasiteGame', () => {
     });
   });
 
+  describe('purge audit trail', () => {
+    const N = 5;
+
+    async function purgeAttemptFee(): Promise<bigint> {
+      return FEE * 4n;
+    }
+
+    beforeEach(async () => {
+      await mock.setRandSeed(2); // seat 2 hosts
+      await game.createGame(players.slice(0, N), { value: await createFee(N) });
+    });
+
+    it('emits an identical event shape for a real attempt and a decoy', async () => {
+      const realTx = await game
+        .connect(signers[2])
+        .attemptPurge(1, encSeat(0), { value: await purgeAttemptFee() });
+      const decoyTx = await game
+        .connect(signers[0])
+        .attemptPurge(1, encSeat(2), { value: await purgeAttemptFee() });
+
+      await expect(realTx).to.emit(game, 'PurgeAttempted').withArgs(1, players[2], 1);
+      await expect(decoyTx).to.emit(game, 'PurgeAttempted').withArgs(1, players[0], 2);
+      // Neither event carries the target seat or the outcome — same discipline
+      // as Jumped.
+    });
+
+    it('burns identical gas for a real attempt and a decoy', async () => {
+      // Same trap as the Jump gas test, and the same fix: isolate exactly one
+      // variable. Comparing two attempts inside one game conflates "is this
+      // caller the host" with "how many iterations did this caller's seat
+      // lookup take" and, on the second call, warmed-storage discount too — all
+      // three are real gas effects that have nothing to do with role. Two
+      // fresh, structurally identical games, same calling seat in both, only
+      // the host differs.
+      const FRESH = 5;
+      const fee = await purgeAttemptFee();
+
+      // Game A — seat 1 hosts, and seat 1 attempts. (real)
+      await mock.setRandSeed(1);
+      await (await game.createGame(players.slice(0, FRESH), { value: await createFee(FRESH) })).wait();
+      const gameA = (await game.nextGameId()) - 1n;
+
+      // Game B — seat 3 hosts, but seat 1 attempts. (decoy)
+      await mock.setRandSeed(3);
+      await (await game.createGame(players.slice(0, FRESH), { value: await createFee(FRESH) })).wait();
+      const gameB = (await game.nextGameId()) - 1n;
+
+      const realGas = (
+        await (await game.connect(signers[1]).attemptPurge(gameA, encSeat(2), { value: fee })).wait()
+      )!.gasUsed;
+      const decoyGas = (
+        await (await game.connect(signers[1]).attemptPurge(gameB, encSeat(2), { value: fee })).wait()
+      )!.gasUsed;
+
+      // Same tolerance as the Jump test, for the same reason: a few gas units
+      // of EVM/mock-level noise are not a fingerprint. A gap worth worrying
+      // about is a percent or more, not eighteen units out of three hundred
+      // thousand.
+      const diff = realGas > decoyGas ? realGas - decoyGas : decoyGas - realGas;
+      const pct = Number((diff * 10000n) / realGas) / 100;
+      expect(pct).to.be.lessThan(
+        1,
+        `gas differed by ${pct}% (real=${realGas} decoy=${decoyGas}) — any measurable gap fingerprints real purge attempts`
+      );
+    });
+
+    it('does not gate the live kill: the call always succeeds regardless of role', async () => {
+      const fee = await purgeAttemptFee();
+      await expect(
+        game.connect(signers[0]).attemptPurge(1, encSeat(2), { value: fee })
+      ).to.not.be.reverted;
+    });
+
+    it('rejects an attempt from a non-player', async () => {
+      await expect(
+        game.connect(signers[8]).attemptPurge(1, encSeat(0), { value: await purgeAttemptFee() })
+      ).to.be.revertedWithCustomError(game, 'NotAPlayer');
+    });
+
+    it('rejects revealPurgeAudit before the game has ended', async () => {
+      await game.connect(signers[2]).attemptPurge(1, encSeat(0), { value: await purgeAttemptFee() });
+      await expect(
+        game.connect(signers[0]).revealPurgeAudit(1, { value: FEE * 2n })
+      ).to.be.revertedWithCustomError(game, 'GameNotEnded');
+    });
+
+    it('after the game ends, correctly distinguishes the real attempt from decoys', async () => {
+      // Seat 2 is the real host and purges for real; seats 0 and 4 send decoys.
+      await game.connect(signers[2]).attemptPurge(1, encSeat(3), { value: await purgeAttemptFee() });
+      await game.connect(signers[0]).attemptPurge(1, encSeat(3), { value: await purgeAttemptFee() });
+      await game.connect(signers[4]).attemptPurge(1, encSeat(1), { value: await purgeAttemptFee() });
+
+      await game.connect(signers[0]).revealHost(1, { value: FEE });
+
+      const n = await game.purgeAttemptCount(1);
+      expect(n).to.equal(3);
+
+      await game.connect(signers[0]).revealPurgeAudit(1, { value: FEE * BigInt(2 * Number(n)) });
+
+      const results: { caller: string; wasHost: bigint }[] = [];
+      for (let i = 0; i < Number(n); i++) {
+        const [caller, , wasHostHandle] = await game.purgeAttemptHandles(1, i);
+        results.push({ caller, wasHost: await mock.plaintextOf(wasHostHandle) });
+      }
+
+      expect(results.find((r) => r.caller === players[2])!.wasHost).to.equal(1n);
+      expect(results.find((r) => r.caller === players[0])!.wasHost).to.equal(0n);
+      expect(results.find((r) => r.caller === players[4])!.wasHost).to.equal(0n);
+    });
+
+    it('rejects a second audit reveal', async () => {
+      await game.connect(signers[2]).attemptPurge(1, encSeat(0), { value: await purgeAttemptFee() });
+      await game.connect(signers[0]).revealHost(1, { value: FEE });
+      const n = await game.purgeAttemptCount(1);
+      await game.connect(signers[0]).revealPurgeAudit(1, { value: FEE * BigInt(2 * Number(n)) });
+      await expect(
+        game.connect(signers[0]).revealPurgeAudit(1, { value: FEE * BigInt(2 * Number(n)) })
+      ).to.be.revertedWithCustomError(game, 'AlreadyRevealed');
+    });
+  });
+
   describe('sanctioned reveals', () => {
     const N = 5;
 

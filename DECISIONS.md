@@ -558,27 +558,62 @@ of things that merely looked improvable.
   failure, `GameRoom.test.ts`'s "refuses to start below 4 players", predates
   this pass entirely and is unrelated).
 
-## Purge is not authorised server-side, and in Inco mode it cannot be
+## Purge: what got fixed, and what is still open
 
-- **Found:** 2026-08-13, reviewing the live Inco build. `GameRoom.purge()`
-  checks phase, liveness, cooldown, range, self-targeting and whether the
-  victim is already dead. It does **not** check that the caller is the
-  Parasite. Nothing in `ParasiteGame.sol` gates it either, and no test covers
-  a human attempting one. The only thing stopping a crew member from killing
-  is that the client hides the button from them.
-- **Why it is not a one-line fix:** in Inco mode the server is deliberately
-  constructed with **no role oracle** — that is the entire premise of the
-  submission. It therefore cannot answer "is this caller the Parasite" even in
-  principle. A server-side check is available only in simulated mode, and
-  adding one there would make the two modes behave differently in a way that
-  hides the real gap rather than closing it.
-- **The correct fix, not attempted here:** route Purge through the contract,
-  the way Jump already goes, so the encrypted role is what authorises the kill
-  and the server merely reacts to a confirmed on-chain event. That is a
-  contract change plus a redeploy plus a new wire event, and it was found
-  roughly a day before the deadline on a build that is otherwise working. The
-  risk of breaking a functioning game outweighed the benefit of closing it
-  under time pressure.
-- **Status: known and disclosed.** It is written up here and in
-  `SUBMISSION.md` rather than left for a judge to find. A dishonest option was
-  available — say nothing, since the UI hides the button — and was not taken.
+The original finding (below, kept for the record) turned out to be two
+separate problems, not one, and they needed different fixes.
+
+**Problem 1 — the button itself was a bigger leak than the missing
+authorisation.** `PURGE` was rendered with `{isParasite && (...)}`, so only the
+Parasite's own client ever showed the button at all. That is a leak Jump's own
+design comment explicitly warns against ("a button that only appeared for the
+Parasite would leak the role to anyone glancing at a screen") — and unlike the
+on-chain gap, this one is trivial to exploit: screen-share, stream, or a judge
+glancing between two open tabs identifies the Parasite instantly, with no
+tooling and no on-chain analysis required. **Fixed.** The button now renders
+for every living player, exactly like Jump, with a disabled condition that is
+deliberately role-blind (range/alive/phase only). Which of two internal paths
+`doPurge` takes — the real kill, or a harmless decoy — is decided inside the
+handler and never shows up in the DOM. Verified live, not just read: with no
+wallet connected (so every client's role is unresolved), all four players in a
+real round can see and mash the button, and the crew count never drops.
+
+**Problem 2 — the kill itself still has no on-chain authorisation**, and that
+is a harder, genuinely different problem (see the original entry below for
+why Jump's trick does not transfer: its effect is invisible, Purge's is a
+body appearing in real time for the whole room, and gating that in real time
+means either the server learning roles or the kill taking on FHE-latency).
+**Partially addressed.** `attemptPurge()`/`revealPurgeAudit()` now commit
+every purge attempt on-chain in Jump's exact shape — caller public, target and
+outcome encrypted, gas-identical for real and decoy — and open the full record
+after the game ends. This does not *prevent* an unauthorised kill from landing
+live; it makes one **provably detectable** after `revealHost()`, by
+cross-referencing a revealed `wasHost=false` attempt against the server's
+public `playerPurged` log. Decoy attempts are sent automatically by every
+living player on a jitter (mirroring Jump's decoy traffic), because without
+them the mere act of calling `attemptPurge` in real time would itself
+identify the caller as the killer, before the audit trail ever unseals.
+
+The full real-time fix — routing the kill through the contract the way Jump's
+host-transfer is, so a non-Parasite's press is a true no-op rather than a
+provable one after the fact — is still the correct long-term answer and is
+still not attempted. It adds FHE-compute-plus-block-confirmation latency to
+the core kill mechanic, which is a bigger change to test than the time
+remaining safely allows.
+
+**Status: the practical, everyday leak (UI/screen-share) is closed. The
+theoretical one (a hand-modified client calling the raw socket event) is
+unprevented but now forensically provable. Both are disclosed here and in
+`SUBMISSION.md`, not left for a judge to find.**
+
+---
+
+*Original entry, 2026-08-13:*
+
+- `GameRoom.purge()` checks phase, liveness, cooldown, range, self-targeting
+  and whether the victim is already dead. It does **not** check that the
+  caller is the Parasite. Nothing in `ParasiteGame.sol` gated it either, and
+  no test covered a human attempting one.
+- In Inco mode the server is deliberately constructed with **no role
+  oracle** — that is the entire premise of the submission. It therefore
+  cannot answer "is this caller the Parasite" even in principle.

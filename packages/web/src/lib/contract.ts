@@ -25,6 +25,23 @@ export const PARASITE_GAME_ABI = [
   },
   {
     type: 'function',
+    name: 'attemptPurge',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'gameId', type: 'uint256' },
+      { name: 'targetSeatInput', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'revealPurgeAudit',
+    stateMutability: 'payable',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'revealEjection',
     stateMutability: 'payable',
     inputs: [
@@ -119,6 +136,41 @@ export const PARASITE_GAME_ABI = [
     outputs: [{ name: '', type: 'uint256' }],
   },
   {
+    type: 'function',
+    name: 'purgeAttemptFee',
+    stateMutability: 'view',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'purgeAttemptCount',
+    stateMutability: 'view',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'purgeAttemptHandles',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'gameId', type: 'uint256' },
+      { name: 'index', type: 'uint256' },
+    ],
+    outputs: [
+      { name: 'caller', type: 'address' },
+      { name: 'targetSeat', type: 'bytes32' },
+      { name: 'wasHost', type: 'bytes32' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'purgeAuditFee',
+    stateMutability: 'view',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
     type: 'event',
     name: 'GameCreated',
     inputs: [
@@ -134,6 +186,23 @@ export const PARASITE_GAME_ABI = [
       { name: 'gameId', type: 'uint256', indexed: true },
       { name: 'caller', type: 'address', indexed: true },
       { name: 'nonce', type: 'uint64', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'PurgeAttempted',
+    inputs: [
+      { name: 'gameId', type: 'uint256', indexed: true },
+      { name: 'caller', type: 'address', indexed: true },
+      { name: 'nonce', type: 'uint64', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'PurgeAuditRevealed',
+    inputs: [
+      { name: 'gameId', type: 'uint256', indexed: true },
+      { name: 'count', type: 'uint256', indexed: false },
     ],
   },
 ] as const;
