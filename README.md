@@ -128,8 +128,6 @@ packages/server      authoritative Socket.io server, 20Hz tick   (~2300 loc)
 packages/web         Next.js 15 + Phaser 3 client                (~2500 loc)
 packages/contracts   ParasiteGame.sol + Hardhat harness          (~1500 loc)
 docs/inco.md         distilled Inco Lightning reference
-DECISIONS.md         every ambiguity in the spec and how it was resolved
-BUILD_REPORT.md      what works, what doesn't, what is untested
 ```
 
 The server is deliberately **role-ignorant** in Inco mode: it runs movement,
