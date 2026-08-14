@@ -133,8 +133,9 @@ export default function Lobby(props: {
           />
 
           <p className="mono-note">
-            Once the expedition starts, <strong>nobody else can join</strong> and nobody
-            can leave. Enforced on the server, not just here.
+            Once the expedition launches, <strong>the outpost seals</strong> — nobody
+            topside can join, and nobody down here leaves the surface. Locked at the
+            server, not just this screen.
           </p>
         </div>
       </div>
@@ -311,7 +312,7 @@ function JoinSheet(props: {
             }}
           />
           <span className="field-help" id="lobby-code-help">
-            Everyone joining the same game must type the same code.
+            Whoever's joining this expedition needs the exact same outpost code.
           </span>
         </div>
 
