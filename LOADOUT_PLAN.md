@@ -1,0 +1,44 @@
+# Parasite v2: Loadout AI Game Competition rebuild
+
+Deadline: entries close 2026-11-06 15:00 UTC. itachi posts the clip Thursday 2026-11-05 19:00 Berlin.
+So everything below must be DONE by Thursday 2026-11-05 16:00 Berlin. Rules: ../hackathon-sprint/loadout-ai-game/RULES.md
+Judging: gameplay potential 40, originality 25, execution 20, development plan 15.
+
+## Owner's call (binding)
+itachi, 2026-11-02: "rebuild parasite assets and stuff from scratch because the game is trash rn".
+The current look is rejected. Do NOT reuse assets/characters.jpg, the old sprites, the old tiles or the old
+UI styling as a base. Keep the game logic, the server, the contracts and the Inco Jump mechanic: those are the
+originality score. Rebuild everything the player SEES.
+
+## Repo rules
+- Work in /opt/hermes/projects/parasite-v2 on branch loadout-v2. Small commits per step.
+- Never push (push URL is disabled on purpose). Never touch /opt/ashe/jobs/parasite or the live theparasite.xyz.
+- Dev on ports 9200 (web) / 9201 (server) so the live game on 9100/9101 is untouched.
+- No emoji anywhere in UI. No em/en dashes in player-facing text.
+
+## Art direction (binding)
+Theme stays: jungle research outpost on planet Virelia, a crew of scientists, one hidden Parasite.
+Target feel: a polished modern indie game, not a jam prototype. Think cohesive top-down 2.5D with soft
+lighting, readable silhouettes, one strong palette (deep teal jungle night, warm lab lights, toxic green
+reserved ONLY for the Parasite and infection), animated idle/walk cycles, ambient particles (spores,
+fireflies, flickering lights), and a vignette/fog-of-war light radius around the player.
+- Characters: build from scratch as code-drawn vector art (SVG or Phaser Graphics rendered to textures)
+  with 4-direction walk cycles and 8+ distinct crew skins via color + accessory. Optional: grok-image-gen
+  for concept references only; ship only assets you can keep consistent.
+- Map: one hand-designed outpost (lab, greenhouse, reactor, comms, medbay, docking pad) with walls,
+  props, doors, lighting. Readable at a glance in a 15 s clip.
+- UI: lobby, role reveal, meeting/vote screen, ejection and win screens rebuilt in the itachi design
+  system. Role reveal and the Jump get a cinematic moment: they are the clip's money shots.
+- Audio is optional; motion and light are not.
+Load itachi-design-system and design-inspo-fidelity before any UI work. Inspo = this section plus the
+in-universe theme; a generic dark dashboard look is a failed session.
+
+## Order of work
+1. Art system + character rebuild + map rebuild (biggest visible jump). Screenshot via puppeteer, judge it honestly against this section, iterate.
+2. UI screens rebuild.
+3. AI crewmate bots on the server (wander, do tasks, vote with simple suspicion, one bot can be the Parasite and Jump) so ONE human can play a full round. Needed for the clip.
+4. Clip: headless capture at 1280x720, 30 to 45 s: walk through the outpost, a body report, the meeting vote, the Jump, an ejection reveal. Save ../hackathon-sprint/loadout-ai-game/clip.mp4 (+ a 15 s cut).
+5. devplan.md (roadmap: mainnet Inco, matchmaking, mobile, maps, ranked) and draft_post.md for X (short, no hashtags spam, tag @loadoutprotocol) in ../hackathon-sprint/loadout-ai-game/.
+
+## Progress log
+Append one line per session: date, what changed, commit hash, screenshot path, what is next.
