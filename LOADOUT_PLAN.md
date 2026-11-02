@@ -16,6 +16,12 @@ originality score. Rebuild everything the player SEES.
 - Dev on ports 9200 (web) / 9201 (server) so the live game on 9100/9101 is untouched.
 - No emoji anywhere in UI. No em/en dashes in player-facing text.
 
+## Memory rules (binding, the box has 8 GB shared with live services)
+The 2026-11-02 16:30 session was OOM-killed by `next dev` (2.1 GB). So:
+- Never run `next dev`. Use `NODE_OPTIONS=--max-old-space-size=1024 npx next build` then `next start -p 9200`.
+- One dev server and one headless browser at a time. Kill both (and anything on 9200/9201) before the session ends.
+- Check `free -m` before a build or a capture; if "available" is under 1500, wait or do non-build work.
+
 ## Art direction (binding)
 Theme stays: jungle research outpost on planet Virelia, a crew of scientists, one hidden Parasite.
 Target feel: a polished modern indie game, not a jam prototype. Think cohesive top-down 2.5D with soft
