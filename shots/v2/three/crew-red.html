@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Virelia crew, seat 0 (red, headlamp), three.js</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #071315; }
+  body { background: radial-gradient(ellipse at 50% 42%, #17393b 0%, #0c2224 55%, #061012 100%); }
+  canvas { display: block; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './vendor/jsm/OrbitControls.js';
+import { RoundedBoxGeometry } from './vendor/jsm/RoundedBoxGeometry.js';
+
+// ?mode=sheet (default): four fixed views side by side, for screenshots.
+// ?mode=orbit: one big view you can drag around, auto-turning.
+const params = new URLSearchParams(location.search);
+const MODE = params.get('mode') || 'sheet';
+
+// Same palette as art2/crew.ts, seat 0.
+const SUIT = 0xe04a5f;
+const INK = 0x0b1517;
+const LAMP = 0xffd58a;
+const RIM = 0x6ee8dc;
+const CHARCOAL = 0x46505a;
+const GLOVE = 0xf2f0ea;
+const VISOR = 0x0d1c22;
+
+// Three-step cel ramp, so shading reads as flat bands like the 2D art.
+function ramp() {
+  const d = new Uint8Array([70, 70, 70, 255, 160, 160, 160, 255, 255, 255, 255, 255]);
+  const t = new THREE.DataTexture(d, 3, 1, THREE.RGBAFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+}
+const RAMP = ramp();
+const toon = (color, extra = {}) => new THREE.MeshToonMaterial({ color, gradientMap: RAMP, ...extra });
+const inkMat = new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide });
+
+const crew = new THREE.Group();
+
+// Add a mesh plus an inverted-hull outline, the 3D version of the heavy ink line.
+function part(geo, mat, pos = [0, 0, 0], rot = [0, 0, 0], ink = 0.035, parent = crew) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(...pos);
+  m.rotation.set(...rot);
+  parent.add(m);
+  if (ink > 0) {
+    const o = new THREE.Mesh(geo, inkMat);
+    o.position.copy(m.position);
+    o.rotation.copy(m.rotation);
+    geo.computeBoundingSphere();
+    const r = geo.boundingSphere.radius;
+    o.scale.setScalar(1 + ink / r);
+    parent.add(o);
+  }
+  return m;
+}
+
+// Legs and boots
+for (const s of [-1, 1]) {
+  part(new THREE.CapsuleGeometry(0.14, 0.3, 6, 16), toon(CHARCOAL), [s * 0.19, 0.44, 0]);
+  part(new RoundedBoxGeometry(0.3, 0.2, 0.42, 4, 0.09), toon(0x323a42), [s * 0.2, 0.14, 0.05]);
+}
+
+// Torso: chunky suit
+part(new THREE.CapsuleGeometry(0.42, 0.3, 8, 24), toon(SUIT), [0, 0.92, 0]);
+// Belt
+part(new THREE.TorusGeometry(0.41, 0.055, 10, 40), toon(0x8c2335), [0, 0.7, 0], [Math.PI / 2, 0, 0], 0.02);
+// Chest badge: rounded plate with a dash
+part(new RoundedBoxGeometry(0.3, 0.17, 0.06, 3, 0.04), toon(0xf4efe6), [0, 1.0, 0.4], [-0.12, 0, 0], 0.02);
+part(new RoundedBoxGeometry(0.14, 0.035, 0.02, 2, 0.012), new THREE.MeshBasicMaterial({ color: INK }), [0, 1.0, 0.44], [-0.12, 0, 0], 0);
+// Collar ring under the helmet
+part(new THREE.TorusGeometry(0.3, 0.07, 10, 36), toon(0x9aa6ab), [0, 1.3, 0], [Math.PI / 2, 0, 0], 0.02);
+
+// Arms and gloves
+for (const s of [-1, 1]) {
+  part(new THREE.SphereGeometry(0.17, 24, 16), toon(SUIT), [s * 0.43, 1.12, 0]);
+  part(new THREE.CapsuleGeometry(0.11, 0.34, 6, 16), toon(CHARCOAL), [s * 0.52, 0.86, 0.02], [0, 0, s * 0.16]);
+  part(new THREE.SphereGeometry(0.14, 24, 16), toon(GLOVE), [s * 0.57, 0.6, 0.04]);
+}
+
+// Backpack with the orange status light
+part(new RoundedBoxGeometry(0.54, 0.52, 0.3, 4, 0.1), toon(0x6b777e), [0, 0.92, -0.44]);
+const core = part(new THREE.CircleGeometry(0.08, 24), new THREE.MeshBasicMaterial({ color: 0xff9a4d }), [0, 0.95, -0.595], [0, Math.PI, 0], 0);
+part(new THREE.TorusGeometry(0.09, 0.018, 8, 24), toon(0x2b3135), [0, 0.95, -0.595], [0, 0, 0], 0);
+
+// Helmet: suit-coloured shell, big dark glass visor, gloss highlight
+const head = new THREE.Group();
+head.position.set(0, 1.72, 0);
+crew.add(head);
+part(new THREE.SphereGeometry(0.5, 40, 28), toon(SUIT), [0, 0, 0], [0, 0, 0], 0.04, head);
+const visorGeo = new THREE.SphereGeometry(0.505, 40, 28, Math.PI * 0.14, Math.PI * 0.72, Math.PI * 0.3, Math.PI * 0.38);
+const visor = new THREE.Mesh(visorGeo, new THREE.MeshStandardMaterial({ color: VISOR, roughness: 0.12, metalness: 0.6 }));
+head.add(visor);
+// Visor rim, inked
+const rim = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.03, 8, 40), new THREE.MeshBasicMaterial({ color: INK }));
+rim.position.set(0, -0.02, 0.36);
+rim.scale.set(1.05, 0.72, 1);
+head.add(rim);
+// Gloss streak on the visor
+const gloss = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, 0.16, 4, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 }));
+gloss.position.set(-0.18, 0.1, 0.46);
+gloss.rotation.set(0.3, -0.35, 0.6);
+head.add(gloss);
+// Faint warm reflection of the lab lamp along the lower visor
+const refl = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.012, 6, 40, Math.PI * 0.45), new THREE.MeshBasicMaterial({ color: LAMP, transparent: true, opacity: 0.5 }));
+refl.position.set(0, 0.02, 0.24);
+refl.rotation.set(0.15, 0, Math.PI * 1.27);
+head.add(refl);
+
+// Headlamp, the seat 0 accessory: housing on the brow, warm emissive lens
+part(new THREE.CylinderGeometry(0.1, 0.1, 0.12, 24), toon(0x8a959b), [0, 0.38, 0.3], [Math.PI / 2 - 0.65, 0, 0], 0.025, head);
+const lens = new THREE.Mesh(new THREE.CircleGeometry(0.075, 24), new THREE.MeshBasicMaterial({ color: LAMP }));
+lens.position.set(0, 0.42, 0.36);
+lens.rotation.set(-0.65, 0, 0);
+head.add(lens);
+part(new THREE.TorusGeometry(0.36, 0.035, 8, 40, Math.PI), toon(0x8a959b), [0, 0.06, 0], [0, 0, 0], 0.02, head).rotation.set(-0.35, Math.PI / 2, Math.PI / 2);
+const glow = new THREE.PointLight(LAMP, 1.6, 2.2, 2);
+glow.position.set(0, 0.5, 0.55);
+head.add(glow);
+
+// Soft ground shadow
+const shadow = new THREE.Mesh(
+  new THREE.CircleGeometry(0.62, 40),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 }),
+);
+shadow.rotation.x = -Math.PI / 2;
+shadow.position.y = 0.005;
+shadow.scale.set(1, 0.7, 1);
+crew.add(shadow);
+
+// Scene and lights: warm lab key from the upper left, cool jungle rim from the lower right
+const scene = new THREE.Scene();
+scene.add(crew);
+scene.add(new THREE.HemisphereLight(0xcfe9e6, 0x10201f, 0.9));
+const key = new THREE.DirectionalLight(0xffe2b8, 2.4);
+key.position.set(-3, 5, 4);
+scene.add(key);
+const rimL = new THREE.DirectionalLight(RIM, 2.4);
+rimL.position.set(3, 0.5, -3);
+scene.add(rimL);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+if (MODE === 'orbit') {
+  renderer.setSize(innerWidth, innerHeight);
+  const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 50);
+  cam.position.set(2.4, 2.2, 4.6);
+  const ctl = new OrbitControls(cam, renderer.domElement);
+  ctl.target.set(0, 1.05, 0);
+  ctl.autoRotate = true;
+  ctl.enableDamping = true;
+  addEventListener('resize', () => {
+    renderer.setSize(innerWidth, innerHeight);
+    cam.aspect = innerWidth / innerHeight;
+    cam.updateProjectionMatrix();
+  });
+  const t0 = performance.now();
+  renderer.setAnimationLoop(() => {
+    const t = (performance.now() - t0) / 1000;
+    head.position.y = 1.72 + Math.sin(t * 2.2) * 0.015; // breathing
+    core.material.color.setHSL(0.07, 1, 0.55 + Math.sin(t * 3) * 0.1);
+    ctl.update();
+    renderer.render(scene, cam);
+  });
+  window.done = true;
+} else {
+  // Sheet: front, three-quarter, side, back
+  const W = 1600, H = 560, n = 4, cw = W / n;
+  renderer.setSize(W, H);
+  renderer.setScissorTest(true);
+  const views = [0, -Math.PI / 5, -Math.PI / 2, Math.PI];
+  views.forEach((yaw, i) => {
+    const cam = new THREE.PerspectiveCamera(28, cw / H, 0.1, 50);
+    const d = 5.2;
+    // rotate the character, keep the lights fixed, like turning it on a stand
+    crew.rotation.y = -yaw;
+    renderer.setViewport(i * cw, 0, cw, H);
+    renderer.setScissor(i * cw, 0, cw, H);
+    cam.position.set(0, 1.55, d);
+    cam.lookAt(0, 1.0, 0);
+    renderer.render(scene, cam);
+  });
+  window.done = true;
+}
+</script>
+</body>
+</html>

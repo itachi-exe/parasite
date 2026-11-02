@@ -10,6 +10,22 @@ The current look is rejected. Do NOT reuse assets/characters.jpg, the old sprite
 UI styling as a base. Keep the game logic, the server, the contracts and the Inco Jump mechanic: those are the
 originality score. Rebuild everything the player SEES.
 
+itachi, 2026-11-02 21:45: "three js is a better stack for this build". The renderer moves from Phaser to
+three.js (r180, already proven headless here). Shape, decided:
+- One three.js scene, orthographic camera at a fixed top-down 3/4 angle (the 2.5D look), toon materials
+  with a 3-band ramp, inverted-hull ink outline, warm key light upper left, teal rim lower right.
+- Crew are low-poly procedural models built in code. Starting point and reference:
+  shots/v2/three/crew-red.html (seat 0, red, headlamp). Seat colours, accessories and forms stay exactly as
+  in art2/crew.ts (SUITS, ACCESSORIES, infected/parasite/fallen); port them, do not redesign them.
+- Walk = procedural leg/arm swing and body bob, idle = breathing. Facing = model rotation, so 4 directions
+  come free.
+- Keep ALL game logic, networking, server, contracts and the Jump. Replace only what draws. Phaser is
+  removed once the three.js scene renders the same game state. Do not run two renderers in the clip.
+- Light radius / fog of war, spores and fireflies are real lights and particles now: use them, they are the
+  reason for the switch.
+- Deadline does not move. If the port is not playable by Wed 2026-11-04 22:00 Berlin, stop polishing and
+  put the remaining time into bots and the clip.
+
 ## Repo rules
 - Work in /opt/hermes/projects/parasite-v2 on branch loadout-v2. Small commits per step.
 - Never push (push URL is disabled on purpose). Never touch /opt/ashe/jobs/parasite or the live theparasite.xyz.
@@ -28,8 +44,7 @@ Target feel: a polished modern indie game, not a jam prototype. Think cohesive t
 lighting, readable silhouettes, one strong palette (deep teal jungle night, warm lab lights, toxic green
 reserved ONLY for the Parasite and infection), animated idle/walk cycles, ambient particles (spores,
 fireflies, flickering lights), and a vignette/fog-of-war light radius around the player.
-- Characters: build from scratch as code-drawn vector art (SVG or Phaser Graphics rendered to textures)
-  with 4-direction walk cycles and 8+ distinct crew skins via color + accessory. Optional: grok-image-gen
+- Characters: three.js procedural toon models (see Owner's call), with 4-direction walk cycles and 8+ distinct crew skins via color + accessory. Optional: grok-image-gen
   for concept references only; ship only assets you can keep consistent.
 - Map: one hand-designed outpost (lab, greenhouse, reactor, comms, medbay, docking pad) with walls,
   props, doors, lighting. Readable at a glance in a 15 s clip.
@@ -40,7 +55,14 @@ Load itachi-design-system and design-inspo-fidelity before any UI work. Inspo = 
 in-universe theme; a generic dark dashboard look is a failed session.
 
 ## Order of work
-1. Art system + character rebuild + map rebuild (biggest visible jump). Screenshot via puppeteer, judge it honestly against this section, iterate.
+1. three.js port, in this order: (a) packages/web/src/game/three/: crew model module ported from
+   shots/v2/three/crew-red.html for all 10 seats + infected/parasite/fallen, with a turnaround screenshot;
+   fix its known flaws first (headlamp too small and on top instead of brow, outline glitches at shoulder
+   and heel in side view, dark limbs vanish on dark background). (b) outpost map as 3D blocks (floors,
+   walls, doors, props, room lights). (c) a ThreeScene that renders the live game state MainScene renders
+   today (players, positions, facing, bodies, tasks), input and camera follow, then remove Phaser.
+   Screenshots via puppeteer with --use-angle=swiftshader --enable-unsafe-swiftshader (WebGL works that
+   way headless; see shots/v2/three/shoot.mjs). Judge honestly, iterate.
 2. UI screens rebuild.
 3. AI crewmate bots on the server (wander, do tasks, vote with simple suspicion, one bot can be the Parasite and Jump) so ONE human can play a full round. Needed for the clip.
 4. Clip: headless capture at 1280x720, 30 to 45 s: walk through the outpost, a body report, the meeting vote, the Jump, an ejection reveal. Save ../hackathon-sprint/loadout-ai-game/clip.mp4 (+ a 15 s cut).
@@ -49,3 +71,4 @@ in-universe theme; a generic dark dashboard look is a failed session.
 ## Progress log
 Append one line per session: date, what changed, commit hash, screenshot path, what is next.
 - 2026-11-02 (eve): v2 crew art from scratch in packages/web/src/game/art2/crew.ts (Canvas 2D, ink outline, warm key + teal rim, 10 suits x 10 accessories, 4 chest trims, walk 4f + idle 2f in 3 facings, infected/parasite forms with toxic green only there, fallen pose). Contact sheet via scripts/art-preview (esbuild + puppeteer, no dev server). Commit 94da667. Shot: shots/v2/crew-sheet.png (vision score 6.5/10 before palette spread fix). Next: wire crew.ts into phaserPen.ts texture bake (CELL_H 76 to 80, origin), MenuBackdrop and gallery, then rebuild the map in art2.
+- 2026-11-02 21:45: owner switched the renderer to three.js. Prototype shots/v2/three/crew-red.html (+ -sheet.png, -hero.png), vision 6.5/10. Not committed into the game yet. Next: step 1a.
