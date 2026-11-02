@@ -48,3 +48,4 @@ in-universe theme; a generic dark dashboard look is a failed session.
 
 ## Progress log
 Append one line per session: date, what changed, commit hash, screenshot path, what is next.
+- 2026-11-02 (eve): v2 crew art from scratch in packages/web/src/game/art2/crew.ts (Canvas 2D, ink outline, warm key + teal rim, 10 suits x 10 accessories, 4 chest trims, walk 4f + idle 2f in 3 facings, infected/parasite forms with toxic green only there, fallen pose). Contact sheet via scripts/art-preview (esbuild + puppeteer, no dev server). Commit 94da667. Shot: shots/v2/crew-sheet.png (vision score 6.5/10 before palette spread fix). Next: wire crew.ts into phaserPen.ts texture bake (CELL_H 76 to 80, origin), MenuBackdrop and gallery, then rebuild the map in art2.
