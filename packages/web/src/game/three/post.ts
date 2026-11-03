@@ -90,7 +90,7 @@ export class VisionPass extends Pass {
           }
           float far = 1.0 - smoothstep(uRange * 0.72, uRange, length(wp.xz - uMe));
           float vis = d >= 1.0 ? 0.0 : smoothstep(0.0, 1.0, m) * far;
-          gl_FragColor = vec4(mix(c.rgb * 0.1 + uFog * 0.5, c.rgb, vis), c.a);
+          gl_FragColor = vec4(mix(c.rgb * 0.03 + uFog * 0.8, c.rgb, vis), c.a);
         }`,
       depthTest: false,
       depthWrite: false,

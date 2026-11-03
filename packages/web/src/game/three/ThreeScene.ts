@@ -28,10 +28,10 @@ import { VisionMask, VISION, canSee, rayLength } from './vision';
 /** Interpolated motion below this (px per frame) is 20Hz noise, not a turn. */
 const TURN_DEADZONE = 0.35;
 /** Half-height of the view in scene units at a landscape aspect. */
-const VIEW = 7.2;
-/** Camera offset from the look point: about 40 degrees down, closer to the crew than a map view. */
-const CAM_UP = 11.3;
-const CAM_BACK = 13.5;
+const VIEW = 6.3;
+/** Camera offset from the look point: about 34 degrees down, low enough to feel present, not a map view. */
+const CAM_UP = 10;
+const CAM_BACK = 14.8;
 /** Corpses render at least this far (px) from a wall so props never swallow them. */
 const BODY_INSET = 20;
 const STICK_R = 54;
@@ -350,6 +350,8 @@ export class ThreeScene {
         this.overlay.appendChild(tag);
         v = { rig, key, tag, x: p.x, y: p.y, facing: 'down' };
         rig.setFacing('down', true);
+        // start unseen: applySight reveals it this frame, so the edge slack never grants a free first look
+        rig.root.visible = isMe;
         this.scene.add(rig.root);
         this.people.set(p.seat, v);
       }
@@ -418,6 +420,7 @@ export class ThreeScene {
       const at = inset(body.x, body.y);
       g.position.copy(toScene(at.x, at.y));
       g.userData.at = at;
+      g.visible = false;
       this.scene.add(g);
       this.bodies.set(body.seat, g);
     }

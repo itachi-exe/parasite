@@ -15,10 +15,10 @@ export const VISION = {
   /** Cone reach in world px. */
   range: 380,
   /** Always-visible radius around the player, still blocked by walls. */
-  ambient: 92,
+  ambient: 78,
   /** Half the cone angle, and the angular blend at its edge (radians). */
-  half: 0.9,
-  soft: 0.3,
+  half: 0.72,
+  soft: 0.2,
   rays: 256,
   /** Rays continue this far past the hit, so the face of the wall reads. */
   pad: 14,
