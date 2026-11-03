@@ -3,14 +3,17 @@
 // ?mode=game  : the game's orthographic 3/4 camera, lineup on a jungle-night floor
 import * as THREE from 'three';
 import { buildCrew, buildFallen, type CrewLook } from '../../src/game/three/crew3d';
+import { setupRenderer, setupEnvironment } from '../../src/game/three/post';
 
 const mode = new URLSearchParams(location.search).get('mode') ?? 'sheet';
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
+setupRenderer(renderer);
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
+setupEnvironment(renderer, scene);
+scene.fog = null;
 scene.background = new THREE.Color(0x0c2224);
 scene.add(new THREE.HemisphereLight(0xcfe9e6, 0x142a28, 1.0));
 const key = new THREE.DirectionalLight(0xffe2b8, 2.3);
@@ -49,7 +52,7 @@ if (mode === 'sheet') {
   const W = 1280, H = 720;
   renderer.setSize(W, H);
   // floor: dark teal deck plates
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 30), new THREE.MeshToonMaterial({ color: 0x1d3b3c }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 30), new THREE.MeshStandardMaterial({ color: 0x1d3b3c, roughness: 0.6, metalness: 0.4 }));
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
   const grid = new THREE.GridHelper(40, 20, 0x2b5152, 0x2b5152);

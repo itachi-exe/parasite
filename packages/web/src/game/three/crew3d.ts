@@ -1,18 +1,18 @@
 /**
- * Virelia field crew as three.js toon models, built in code.
+ * Virelia field crew as three.js stylized-PBR models, built in code.
  *
  * Ported from art2/crew.ts: same seat colours (SUITS), same accessories,
  * same infected / Parasite / fallen forms. Toxic green appears ONLY on the
- * infected and Parasite forms. Lighting language: 3-band toon ramp, warm key
- * from the upper left (scene light), teal rim on the lower right (baked into
- * the material so it survives any scene), inverted-hull ink outline.
+ * infected and Parasite forms. Lighting language: PBR surfaces (rubberised
+ * suit, metal fittings, clearcoat visor), warm key from the upper left (scene
+ * light), soft teal Fresnel rim on the lower right baked into the material so
+ * silhouettes read on the dark jungle without an ink outline.
  *
  * Units: one unit is roughly a third of a crew member; a crew stands ~2.3 tall
  * with feet at y = 0. The model faces +Z ("down" on screen).
  */
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SUITS, ACCESSORIES, type Form } from '../art2/crew';
 
 export type Facing4 = 'down' | 'up' | 'left' | 'right';
@@ -27,7 +27,6 @@ export const TOXIC = 0xa6ff3d;
 const TOXIC_DEEP = 0x4fbf1a;
 const LAMP = 0xffd58a;
 const RIM = new THREE.Color(0x6ee8dc);
-const INK_W = 0.034;
 
 const YAW: Record<Facing4, number> = { down: 0, up: Math.PI, right: Math.PI / 2, left: -Math.PI / 2 };
 
@@ -49,48 +48,68 @@ export function suitColor(look: CrewLook): number {
 }
 
 // ── shared materials and geometry caches ────────────────────────────────────
-let RAMP: THREE.DataTexture | null = null;
-function ramp(): THREE.DataTexture {
-  if (RAMP) return RAMP;
-  const d = new Uint8Array([84, 84, 84, 255, 170, 170, 170, 255, 255, 255, 255, 255]);
-  RAMP = new THREE.DataTexture(d, 3, 1, THREE.RGBAFormat);
-  RAMP.minFilter = RAMP.magFilter = THREE.NearestFilter;
-  RAMP.needsUpdate = true;
-  return RAMP;
-}
+/** Surface kinds, each with its own roughness/metalness (stylized PBR). */
+export type Surf = 'suit' | 'rubber' | 'metal' | 'paint' | 'plastic' | 'cloth' | 'glass';
+const SURF: Record<Surf, { r: number; m: number; cc?: number }> = {
+  suit: { r: 0.4, m: 0, cc: 0.45 }, // rubberised suit with a faint coat
+  rubber: { r: 0.82, m: 0 },
+  metal: { r: 0.32, m: 0.9 },
+  paint: { r: 0.55, m: 0.35 }, // painted metal panels
+  plastic: { r: 0.42, m: 0 },
+  cloth: { r: 0.95, m: 0 },
+  glass: { r: 0.06, m: 0.1, cc: 1 },
+};
 
-const toonCache = new Map<number, THREE.MeshToonMaterial>();
-/** Toon material with a banded teal rim on the lower-right edge (view space). */
-export function toon(color: number): THREE.MeshToonMaterial {
-  const hit = toonCache.get(color);
+const pbrCache = new Map<string, THREE.MeshStandardMaterial>();
+/**
+ * PBR material with a soft Fresnel rim in teal from the lower right (view
+ * space), so dark suits keep a silhouette against the jungle night.
+ */
+export function pbr(color: number, kind: Surf = 'suit', rim = true): THREE.MeshStandardMaterial {
+  const k = `${color}:${kind}:${rim}`;
+  const hit = pbrCache.get(k);
   if (hit) return hit;
-  const m = new THREE.MeshToonMaterial({ color, gradientMap: ramp() });
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.uRim = { value: RIM };
-    sh.fragmentShader = 'uniform vec3 uRim;\n' + sh.fragmentShader.replace(
-      '#include <opaque_fragment>',
-      `float rimF = 1.0 - max(dot(normal, normalize(vViewPosition)), 0.0);
-       float rimM = smoothstep(-0.1, 0.55, normal.x * 0.75 - normal.y * 0.65);
-       outgoingLight += uRim * smoothstep(0.52, 0.62, rimF) * rimM * 0.75;
-       #include <opaque_fragment>`,
-    );
-  };
-  m.customProgramCacheKey = () => 'virelia-rim';
-  toonCache.set(color, m);
+  const s = SURF[kind];
+  const m = s.cc
+    ? new THREE.MeshPhysicalMaterial({ color, roughness: s.r, metalness: s.m, clearcoat: s.cc, clearcoatRoughness: 0.2 })
+    : new THREE.MeshStandardMaterial({ color, roughness: s.r, metalness: s.m });
+  // visors and metal fittings need to catch the room environment even at night
+  if (kind === 'glass' || kind === 'metal') m.envMapIntensity = kind === 'glass' ? 4 : 1.2;
+  if (rim) {
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uRim = { value: RIM };
+      sh.fragmentShader = 'uniform vec3 uRim;\n' + sh.fragmentShader.replace(
+        '#include <opaque_fragment>',
+        `float rimF = 1.0 - max(dot(normal, normalize(vViewPosition)), 0.0);
+         float rimM = smoothstep(-0.2, 0.7, normal.x * 0.75 - normal.y * 0.65);
+         outgoingLight += uRim * pow(rimF, 2.5) * rimM * 1.1;
+         // a NaN here becomes a solid block once bloom spreads it
+         if (any(isnan(outgoingLight)) || any(isinf(outgoingLight))) outgoingLight = vec3(0.0);
+         #include <opaque_fragment>`,
+      );
+    };
+    m.customProgramCacheKey = () => 'virelia-rim';
+  }
+  pbrCache.set(k, m);
   return m;
 }
 
 const basicCache = new Map<string, THREE.MeshBasicMaterial>();
-export function flat(color: number, opacity = 1, additive = false): THREE.MeshBasicMaterial {
-  const k = `${color}:${opacity}:${additive}`;
+/**
+ * Unlit colour. `boost` > 1 pushes it past 1.0 in linear HDR, which is what
+ * the bloom pass keys on: only lamps, screens, fireflies and toxic green glow.
+ */
+export function flat(color: number, opacity = 1, additive = false, boost = 1): THREE.MeshBasicMaterial {
+  const k = `${color}:${opacity}:${additive}:${boost}`;
   const hit = basicCache.get(k);
   if (hit) return hit;
   const m = new THREE.MeshBasicMaterial({
-    color,
+    color: new THREE.Color(color).multiplyScalar(boost),
     transparent: opacity < 1 || additive,
     opacity,
     depthWrite: !(opacity < 1 || additive),
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    fog: !additive,
   });
   basicCache.set(k, m);
   return m;
@@ -111,52 +130,23 @@ export function glowMat(color: number, opacity: number): THREE.MeshBasicMaterial
     FALLOFF.magFilter = FALLOFF.minFilter = THREE.LinearFilter;
     FALLOFF.needsUpdate = true;
   }
-  return new THREE.MeshBasicMaterial({ color, map: FALLOFF, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
-}
-
-let INK_MAT: THREE.ShaderMaterial | null = null;
-/** Inverted hull pushed out along smoothed normals, so the line is even everywhere. */
-function inkMat(): THREE.ShaderMaterial {
-  if (INK_MAT) return INK_MAT;
-  INK_MAT = new THREE.ShaderMaterial({
-    uniforms: { uW: { value: INK_W }, uC: { value: new THREE.Color(INK) } },
-    vertexShader: `uniform float uW;
-      void main(){
-        vec3 n = normalize(normalMatrix * normal);
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        mv.xyz += n * uW;
-        gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader: `uniform vec3 uC; void main(){ gl_FragColor = vec4(uC, 1.0); }`,
-    side: THREE.BackSide,
-  });
-  return INK_MAT;
-}
-
-const hullCache = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
-/** Welded copy with smooth normals: hard-edged caps no longer split the hull. */
-function hullOf(geo: THREE.BufferGeometry): THREE.BufferGeometry {
-  const hit = hullCache.get(geo);
-  if (hit) return hit;
-  const g = geo.clone();
-  for (const a of Object.keys(g.attributes)) if (a !== 'position') g.deleteAttribute(a);
-  const w = mergeVertices(g, 1e-3);
-  w.computeVertexNormals();
-  hullCache.set(geo, w);
-  return w;
+  return new THREE.MeshBasicMaterial({ color, map: FALLOFF, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
 }
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
 export function geo<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
-  let g = geoCache.get(key);
+  // the factory source is part of the key: two modules reusing a name (the
+  // outpost's 3.6 m 'lampglow' pool once replaced the backpack lamp) cannot collide
+  const k = key + make.toString();
+  let g = geoCache.get(k);
   if (!g) {
     g = make();
-    geoCache.set(key, g);
+    geoCache.set(k, g);
   }
   return g as T;
 }
-const sphere = (r: number) => geo(`s${r}`, () => new THREE.SphereGeometry(r, 28, 18));
-const capsule = (r: number, h: number) => geo(`c${r}:${h}`, () => new THREE.CapsuleGeometry(r, h, 6, 16));
+const sphere = (r: number) => geo(`s${r}`, () => new THREE.SphereGeometry(r, 40, 28));
+const capsule = (r: number, h: number) => geo(`c${r}:${h}`, () => new THREE.CapsuleGeometry(r, h, 10, 28));
 const rbox = (w: number, h: number, d: number, r: number) =>
   geo(`b${w}:${h}:${d}:${r}`, () => new RoundedBoxGeometry(w, h, d, 3, r));
 const torus = (r: number, t: number, arc = Math.PI * 2) =>
@@ -167,14 +157,14 @@ type V3 = [number, number, number];
 /** A strip that hugs the helmet: a latitude band of a slightly larger sphere. */
 const band = (r: number, from: number, len: number) =>
   geo(`band${r}:${from}:${len}`, () => new THREE.SphereGeometry(r, 36, 3, 0, Math.PI * 2, from, len));
-/** Mesh plus its ink hull. `ink` false for decals, glows and tiny details. */
+/** Place a mesh. `cast` false for decals, glows and tiny details (no shadow). */
 export function part(
   parent: THREE.Object3D,
   g: THREE.BufferGeometry,
   m: THREE.Material,
   pos: V3 = [0, 0, 0],
   rot: V3 = [0, 0, 0],
-  ink = true,
+  cast = true,
   scale?: V3,
 ): THREE.Mesh {
   const mesh = new THREE.Mesh(g, m);
@@ -182,10 +172,8 @@ export function part(
   mesh.rotation.set(...rot);
   if (scale) mesh.scale.set(...scale);
   parent.add(mesh);
-  if (ink) {
-    const o = new THREE.Mesh(hullOf(g), inkMat());
-    mesh.add(o);
-  }
+  mesh.castShadow = cast && !(m as THREE.MeshBasicMaterial).isMeshBasicMaterial;
+  mesh.receiveShadow = !(m as THREE.MeshBasicMaterial).isMeshBasicMaterial;
   return mesh;
 }
 
@@ -224,27 +212,38 @@ export function buildCrew(look: CrewLook): CrewRig {
     const hip = new THREE.Group();
     hip.position.set(s * 0.19, 0.66, 0);
     body.add(hip);
-    part(hip, capsule(0.14, 0.28), toon(limb), [0, -0.22, 0]);
-    part(hip, rbox(0.3, 0.2, 0.42, 0.09), toon(0x3b464d), [0, -0.52, 0.05]);
+    part(hip, capsule(0.14, 0.28), pbr(limb), [0, -0.22, 0]);
+    part(hip, rbox(0.12, 0.14, 0.08, 0.03), pbr(tone(limb, -0.25), 'cloth'), [s * 0.12, -0.2, 0.06]); // thigh pocket
+    part(hip, rbox(0.3, 0.2, 0.42, 0.09), pbr(0x3b464d, 'rubber'), [0, -0.52, 0.05]);
+    part(hip, rbox(0.32, 0.06, 0.45, 0.025), pbr(0x15191b, 'rubber'), [0, -0.6, 0.05]); // tread sole
     legs.push(hip);
   }
 
   // torso
   const chest = new THREE.Group();
   body.add(chest);
-  part(chest, capsule(0.42, 0.3), toon(suit), [0, 0.95, 0]);
-  part(chest, torus(0.415, 0.055), toon(tone(suit, -0.5)), [0, 0.74, 0], [Math.PI / 2, 0, 0]);
+  part(chest, capsule(0.42, 0.3), pbr(suit), [0, 0.95, 0]);
+  part(chest, torus(0.415, 0.055), pbr(tone(suit, -0.5), 'rubber'), [0, 0.74, 0], [Math.PI / 2, 0, 0]);
   chestTrim(chest, look);
-  part(chest, torus(0.3, 0.07), toon(0x9aa6ab), [0, 1.33, 0], [Math.PI / 2, 0, 0]);
+  part(chest, torus(0.3, 0.07), pbr(0x9aa6ab, 'metal'), [0, 1.33, 0], [Math.PI / 2, 0, 0]);
   if (!human) veins(chest, look.form);
 
   // sample pack with the warm status lamp
   const pack = new THREE.Group();
   pack.position.set(0, 0.95, -0.44);
   chest.add(pack);
-  part(pack, rbox(0.54, 0.52, 0.3, 0.1), toon(0x4a5658));
-  part(pack, geo('lampdot', () => new THREE.CircleGeometry(0.075, 20)), flat(LAMP), [0, 0.04, -0.152], [0, Math.PI, 0], false);
+  part(pack, rbox(0.54, 0.52, 0.3, 0.1), pbr(0x4a5658, 'plastic'));
+  part(pack, geo('lampdot', () => new THREE.CircleGeometry(0.075, 20)), flat(LAMP, 1, false, 4), [0, 0.04, -0.152], [0, Math.PI, 0], false);
   part(pack, geo('lampglow', () => new THREE.CircleGeometry(0.17, 20)), flat(LAMP, 0.28, true), [0, 0.04, -0.155], [0, Math.PI, 0], false);
+
+  // air hose from the pack over the shoulder to the collar
+  const hose = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.2, 0.22, -0.02), new THREE.Vector3(0.34, 0.46, 0.12),
+    new THREE.Vector3(0.3, 0.56, 0.42), new THREE.Vector3(0.18, 0.4, 0.62),
+  ]);
+  part(pack, geo('hose', () => new THREE.TubeGeometry(hose, 24, 0.035, 8, false)), pbr(0x2b3234, 'rubber'));
+  // vertical front seam of the suit
+  part(chest, rbox(0.025, 0.5, 0.02, 0.01), pbr(tone(suit, -0.35), 'rubber', false), [0, 0.9, 0.42], [-0.05, 0, 0], false);
 
   // arms: pivot at the shoulder; suit coloured like the 2D art, white gloves
   const arms: THREE.Group[] = [];
@@ -253,9 +252,9 @@ export function buildCrew(look: CrewLook): CrewRig {
     const sh = new THREE.Group();
     sh.position.set(s * 0.45, 1.15, 0);
     chest.add(sh);
-    part(sh, sphere(0.17), toon(suit), [0, 0, 0], [0, 0, 0], false);
-    part(sh, capsule(0.11, 0.3), toon(tone(suit, -0.12)), [s * 0.06, -0.24, 0.02], [0, 0, s * 0.16]);
-    part(sh, sphere(0.135), toon(glove), [s * 0.11, -0.5, 0.04]);
+    part(sh, sphere(0.17), pbr(suit), [0, 0, 0], [0, 0, 0], false);
+    part(sh, capsule(0.11, 0.3), pbr(tone(suit, -0.12)), [s * 0.06, -0.24, 0.02], [0, 0, s * 0.16]);
+    part(sh, sphere(0.135), pbr(glove, 'rubber'), [s * 0.11, -0.5, 0.04]);
     arms.push(sh);
   }
 
@@ -263,7 +262,7 @@ export function buildCrew(look: CrewLook): CrewRig {
   const head = new THREE.Group();
   head.position.set(0, 1.76, 0);
   body.add(head);
-  part(head, sphere(0.5), toon(suit));
+  part(head, sphere(0.5), pbr(suit));
   visor(head, look);
   accessory(head, chest, look, suit);
 
@@ -284,8 +283,8 @@ export function buildCrew(look: CrewLook): CrewRig {
         new THREE.Vector3(Math.sign(x) * 0.45 * d, 1.1, 0.05),
       ]);
       const tg = new THREE.TubeGeometry(curve, 24, 0.055, 8, false);
-      part(g, tg, toon(TOXIC_DEEP));
-      part(g, sphere(0.085), flat(TOXIC), curve.getPoint(1).toArray() as V3);
+      part(g, tg, pbr(TOXIC_DEEP, 'plastic'));
+      part(g, sphere(0.085), flat(TOXIC, 1, false, 3), curve.getPoint(1).toArray() as V3);
       part(g, sphere(0.2), flat(TOXIC, 0.25, true), curve.getPoint(1).toArray() as V3, [0, 0, 0], false);
       tendrils.push(g);
     }
@@ -336,11 +335,7 @@ function visor(head: THREE.Group, look: CrewLook): void {
   const frame = geo('visorframe', () => new THREE.SphereGeometry(0.507, 40, 24, Math.PI * 0.13, Math.PI * 0.74, Math.PI * 0.29, Math.PI * 0.42));
   part(head, frame, flat(INK), [0, -0.02, 0], [0, 0, 0], false);
   const vg = geo('visor', () => new THREE.SphereGeometry(0.514, 40, 24, Math.PI * 0.16, Math.PI * 0.68, Math.PI * 0.32, Math.PI * 0.36));
-  const glass = new THREE.MeshStandardMaterial({
-    color: parasite ? 0x1b3a10 : 0x13242a,
-    roughness: 0.15,
-    metalness: 0.55,
-  });
+  const glass = pbr(parasite ? 0x1b3a10 : 0x13242a, 'glass', false);
   part(head, vg, glass, [0, -0.02, 0], [0, 0, 0], false);
   if (look.form === 'human') {
     // the lab lamp caught in the glass, plus a white glint
@@ -350,7 +345,7 @@ function visor(head: THREE.Group, look: CrewLook): void {
     // eyeshine behind the glass, and a lit crack
     const k = parasite ? 1 : 0.7;
     for (const x of [-0.13, 0.13]) {
-      part(head, sphere(0.05), flat(TOXIC), [x, -0.02, 0.47], [0, 0, 0], false);
+      part(head, sphere(0.05), flat(TOXIC, 1, false, 4), [x, -0.02, 0.47], [0, 0, 0], false);
       part(head, sphere(0.12), flat(TOXIC, 0.3 * k, true), [x, -0.02, 0.45], [0, 0, 0], false);
     }
     const crack = new THREE.CatmullRomCurve3([
@@ -363,7 +358,7 @@ function visor(head: THREE.Group, look: CrewLook): void {
 
 function chestTrim(chest: THREE.Group, look: CrewLook): void {
   const kind = ((look.skin % 4) + 4) % 4;
-  const cream = toon(0xf4efe6);
+  const cream = pbr(0xf4efe6, 'plastic');
   const z = 0.41;
   const tilt: V3 = [-0.12, 0, 0];
   if (kind === 0) {
@@ -395,8 +390,8 @@ function veins(chest: THREE.Group, form: Form): void {
 function accessory(head: THREE.Group, chest: THREE.Group, look: CrewLook, suit: number): void {
   const a = ACCESSORIES[((look.seat % 10) + 10) % 10]!;
   const human = look.form === 'human';
-  const metal = toon(0xb9c2c0);
-  const dark = toon(0x27302f);
+  const metal = pbr(0xb9c2c0, 'metal');
+  const dark = pbr(0x27302f, 'rubber');
   switch (a) {
     case 'headlamp': {
       // band round the brow, a big housing on the front of the helmet
@@ -405,8 +400,8 @@ function accessory(head: THREE.Group, chest: THREE.Group, look: CrewLook, suit: 
       lamp.position.set(0, 0.27, 0.43);
       lamp.rotation.x = 0.55;
       head.add(lamp);
-      part(lamp, rbox(0.26, 0.17, 0.14, 0.05), toon(0xd7dcd8));
-      part(lamp, geo('lens', () => new THREE.CircleGeometry(0.065, 20)), flat(LAMP), [0, 0, 0.072], [0, 0, 0], false);
+      part(lamp, rbox(0.26, 0.17, 0.14, 0.05), pbr(0xd7dcd8, 'paint'));
+      part(lamp, geo('lens', () => new THREE.CircleGeometry(0.065, 20)), flat(LAMP, 1, false, 5), [0, 0, 0.072], [0, 0, 0], false);
       part(lamp, geo('lensglow', () => new THREE.CircleGeometry(0.2, 24)), flat(LAMP, 0.35, true), [0, 0, 0.08], [0, 0, 0], false);
       break;
     }
@@ -416,7 +411,7 @@ function accessory(head: THREE.Group, chest: THREE.Group, look: CrewLook, suit: 
       ant.rotation.set(-0.2, 0, -0.18);
       head.add(ant);
       part(ant, cyl(0.04, 0.04, 0.6), metal, [0, 0.3, 0]);
-      part(ant, sphere(0.1), toon(human ? 0xff6b6b : TOXIC), [0, 0.64, 0]);
+      part(ant, sphere(0.1), human ? pbr(0xff6b6b, 'plastic') : flat(TOXIC, 1, false, 3), [0, 0.64, 0]);
       break;
     }
     case 'fin': {
@@ -427,15 +422,15 @@ function accessory(head: THREE.Group, chest: THREE.Group, look: CrewLook, suit: 
       sh.closePath();
       const g = geo('fin', () => new THREE.ExtrudeGeometry(sh, { depth: 0.08, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02, bevelSegments: 2 }));
       // profile runs front to back over the crown
-      part(head, g, toon(suit), [-0.04, 0.38, 0.05], [0, -Math.PI / 2, 0]);
+      part(head, g, pbr(suit), [-0.04, 0.38, 0.05], [0, -Math.PI / 2, 0]);
       break;
     }
     case 'earpods': {
-      for (const s of [-1, 1]) part(head, rbox(0.12, 0.26, 0.22, 0.05), toon(0x3a4547), [s * 0.5, 0, 0]);
+      for (const s of [-1, 1]) part(head, rbox(0.12, 0.26, 0.22, 0.05), pbr(0x3a4547, 'plastic'), [s * 0.5, 0, 0]);
       const boom = new THREE.CatmullRomCurve3([
         new THREE.Vector3(-0.52, -0.08, 0.05), new THREE.Vector3(-0.48, -0.3, 0.25), new THREE.Vector3(-0.25, -0.38, 0.42),
       ]);
-      part(head, new THREE.TubeGeometry(boom, 12, 0.022, 6, false), toon(0x3a4547));
+      part(head, new THREE.TubeGeometry(boom, 12, 0.022, 6, false), pbr(0x3a4547, 'rubber'));
       break;
     }
     case 'goggles': {
@@ -445,26 +440,26 @@ function accessory(head: THREE.Group, chest: THREE.Group, look: CrewLook, suit: 
         gg.position.set(x, 0.33, 0.37);
         gg.rotation.x = Math.PI / 2 - 0.75;
         head.add(gg);
-        part(gg, cyl(0.12, 0.12, 0.1), toon(0xc9a25a));
-        part(gg, geo('gogglens', () => new THREE.CircleGeometry(0.08, 20)), toon(0x1e3a40), [0, 0.052, 0], [-Math.PI / 2, 0, 0], false);
+        part(gg, cyl(0.12, 0.12, 0.1), pbr(0xc9a25a, 'metal'));
+        part(gg, geo('gogglens', () => new THREE.CircleGeometry(0.08, 20)), pbr(0x1e3a40, 'glass'), [0, 0.052, 0], [-Math.PI / 2, 0, 0], false);
       }
       break;
     }
     case 'beanie': {
       const cap = geo('beanie', () => new THREE.SphereGeometry(0.53, 32, 14, 0, Math.PI * 2, 0, Math.PI * 0.36));
-      part(head, cap, toon(0x3b4c74), [0, 0.02, 0]);
-      part(head, band(0.545, Math.PI * 0.3, Math.PI * 0.07), toon(0x55679a), [0, 0.02, 0], [0, 0, 0], false);
-      part(head, sphere(0.1), toon(0xe8e2d4), [0, 0.56, 0]);
+      part(head, cap, pbr(0x3b4c74, 'cloth'), [0, 0.02, 0]);
+      part(head, band(0.545, Math.PI * 0.3, Math.PI * 0.07), pbr(0x55679a, 'cloth'), [0, 0.02, 0], [0, 0, 0], false);
+      part(head, sphere(0.1), pbr(0xe8e2d4, 'cloth'), [0, 0.56, 0]);
       break;
     }
     case 'crest': {
       const col = human ? 0x7ff0ff : TOXIC;
-      part(head, torus(0.53, 0.055, Math.PI * 0.8), flat(col), [0, 0, 0], [0, Math.PI / 2, Math.PI * 0.2]);
+      part(head, torus(0.53, 0.055, Math.PI * 0.8), flat(col, 1, false, 2.5), [0, 0, 0], [0, Math.PI / 2, Math.PI * 0.2]);
       part(head, torus(0.53, 0.14, Math.PI * 0.8), flat(col, 0.25, true), [0, 0, 0], [0, Math.PI / 2, Math.PI * 0.2], false);
       break;
     }
     case 'scarf': {
-      const red = toon(0xc95b3c);
+      const red = pbr(0xc95b3c, 'cloth');
       part(chest, torus(0.33, 0.1), red, [0, 1.36, 0], [Math.PI / 2, 0, 0]);
       part(chest, rbox(0.17, 0.38, 0.07, 0.03), red, [-0.2, 1.12, 0.4], [-0.2, 0, 0.1]);
       break;
@@ -476,7 +471,7 @@ function accessory(head: THREE.Group, chest: THREE.Group, look: CrewLook, suit: 
       head.add(d);
       part(d, cyl(0.04, 0.04, 0.4), metal, [0, 0.2, 0]);
       const cup = geo('dish', () => new THREE.SphereGeometry(0.2, 20, 8, 0, Math.PI * 2, Math.PI * 0.62, Math.PI * 0.38));
-      const dm = toon(0xc9d1d0);
+      const dm = pbr(0xc9d1d0, 'metal').clone();
       dm.side = THREE.DoubleSide;
       part(d, cup, dm, [0, 0.52, 0], [0.5, 0, 0]);
       part(d, sphere(0.035), flat(human ? LAMP : TOXIC), [0, 0.42, 0.06], [0, 0, 0], false);
@@ -485,10 +480,10 @@ function accessory(head: THREE.Group, chest: THREE.Group, look: CrewLook, suit: 
     case 'hood': {
       // cloth hood over the back of the helmet, open at the face
       const hood = geo('hood', () => new THREE.SphereGeometry(0.58, 32, 20, Math.PI * 0.95, Math.PI * 1.1, 0, Math.PI * 0.85));
-      const hm = toon(0x5f5446);
+      const hm = pbr(0x5f5446, 'cloth').clone();
       hm.side = THREE.DoubleSide;
       part(head, hood, hm, [0, 0.02, -0.04]);
-      part(head, torus(0.5, 0.05, Math.PI * 1.1), toon(0x3e372e), [0, 0.02, 0.1], [0, 0, -Math.PI * 0.05], false);
+      part(head, torus(0.5, 0.05, Math.PI * 1.1), pbr(0x3e372e, 'cloth'), [0, 0.02, 0.1], [0, 0, -Math.PI * 0.05], false);
       break;
     }
   }
