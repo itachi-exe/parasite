@@ -26,6 +26,16 @@ three.js (r180, already proven headless here). Shape, decided:
 - Deadline does not move. If the port is not playable by Wed 2026-11-04 22:00 Berlin, stop polishing and
   put the remaining time into bots and the clip.
 
+itachi, 2026-11-03 05:15: "make sure the intro page or first page and all component on parasite original
+website are updated or upgraded to this new design". Scope is the WHOLE site, not just the game scene:
+landing/intro page (/), gallery, lobby and room join, name and seat pick, in-game HUD, task panels, meeting
+and voting screens, chat, the Jump UI, end-of-round and win screens, loading and error states, buttons,
+modals, fonts, favicon and OG image. Every surface must match the new stylized-realism art direction (same
+palette, lighting mood, type, custom SVG icons, no emoji, no old Phaser-era styling). Load
+itachi-design-system before touching UI. Order: game playable first (Wed 22:00 gate), then the landing page
+(it is the first thing judges see), then the in-game UI, then the rest. Done when a full click-through from /
+to the win screen shows no old-design surface; screenshot each one into shots/v2/site/.
+
 ## Repo rules
 - Work in /opt/hermes/projects/parasite-v2 on branch loadout-v2. Small commits per step.
 - Never push (push URL is disabled on purpose). Never touch /opt/ashe/jobs/parasite or the live theparasite.xyz.
