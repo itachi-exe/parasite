@@ -26,6 +26,15 @@ const bridge: SceneBridge = {
   frozen: false,
   onInput: () => {},
 };
+// the living walk a step first so the sight cone has a direction (?look=up|down|left|right)
+const look = new URLSearchParams(location.search).get('look') ?? (mode === 'specimen' ? 'up' : 'right');
+const step = ({ up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] } as Record<string, number[]>)[look] ?? [1, 0];
+const t0 = performance.now();
+const walker = setInterval(() => {
+  const k = Math.min(1, (performance.now() - t0) / 900);
+  bridge.positions.set(0, { x: spots[0]![0] + step[0]! * 40 * k, y: spots[0]![1] + step[1]! * 40 * k, dir: 1, moving: k < 1 });
+  if (k >= 1) clearInterval(walker);
+}, 50);
 const host = document.getElementById('stage')!;
 new ThreeScene(host, bridge);
 // let the walk cycles, flicker and camera settle, then shoot

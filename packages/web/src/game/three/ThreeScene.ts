@@ -14,6 +14,7 @@ import {
   TASK_IDS,
   PLAYER_SPEED,
   resolveMove,
+  isWalkable,
   type PublicPlayer,
   type Seat,
   type TaskId,
@@ -22,11 +23,17 @@ import type { SceneBridge } from '../bridge';
 import { buildCrew, buildFallen, glowMat, geo, type CrewRig, type Facing4 } from './crew3d';
 import { buildOutpost, addNightLights, toScene } from './outpost3d';
 import { setupRenderer, setupEnvironment, makePost, type Post } from './post';
+import { VisionMask, VISION, canSee, rayLength } from './vision';
 
 /** Interpolated motion below this (px per frame) is 20Hz noise, not a turn. */
 const TURN_DEADZONE = 0.35;
 /** Half-height of the view in scene units at a landscape aspect. */
-const VIEW = 8.5;
+const VIEW = 7.2;
+/** Camera offset from the look point: about 40 degrees down, closer to the crew than a map view. */
+const CAM_UP = 11.3;
+const CAM_BACK = 13.5;
+/** Corpses render at least this far (px) from a wall so props never swallow them. */
+const BODY_INSET = 20;
 const STICK_R = 54;
 const STATION_REACH = 56;
 
@@ -73,6 +80,19 @@ function ghostify(root: THREE.Object3D): void {
   });
 }
 
+/** Pull a point away from nearby walls along the four axes. */
+function inset(x: number, y: number): { x: number; y: number } {
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
+    const free = rayLength(x, y, a, BODY_INSET);
+    if (free < BODY_INSET && isWalkable(x - Math.cos(a) * (BODY_INSET - free), y - Math.sin(a) * (BODY_INSET - free))) {
+      x -= Math.cos(a) * (BODY_INSET - free);
+      y -= Math.sin(a) * (BODY_INSET - free);
+    }
+  }
+  return { x, y };
+}
+
 export class ThreeScene {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -90,6 +110,10 @@ export class ThreeScene {
   private stick = { id: null as number | null, ox: 0, oy: 0, ax: 0, ay: 0 };
   private lastSent = { ax: 0, ay: 0, at: 0 };
   private predicted: { x: number; y: number } | null = null;
+  private vision = new VisionMask();
+  /** Where my sight cone points, world radians (0 = +x, PI/2 = down the screen). */
+  private look = Math.PI / 2;
+  private lookFrom: { x: number; y: number } | null = null;
   private camAt = new THREE.Vector3();
   private camReady = false;
   private raf = 0;
@@ -152,6 +176,7 @@ export class ThreeScene {
     this.overlay.remove();
     this.stickEl.remove();
     this.post.composer.dispose();
+    this.vision.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -295,7 +320,7 @@ export class ThreeScene {
       return live ? { ...p, ...live } : p;
     });
     const seen = new Set<Seat>();
-    let me: { x: number; y: number } | null = null;
+    let me: PublicPlayer | null = null;
 
     for (let p of players) {
       const isMe = p.seat === b.mySeat;
@@ -321,6 +346,7 @@ export class ThreeScene {
         if (!p.alive) ghostify(rig.root);
         const tag = document.createElement('div');
         tag.className = 'stage-tag';
+        tag.style.transition = 'opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1)';
         this.overlay.appendChild(tag);
         v = { rig, key, tag, x: p.x, y: p.y, facing: 'down' };
         rig.setFacing('down', true);
@@ -353,6 +379,7 @@ export class ThreeScene {
     }
 
     this.syncBodies(players);
+    this.applySight(me, dt);
     this.outpost.update(this.still ? 2 : t);
     this.updateStations(me, t);
     this.updateCamera(me, dt);
@@ -388,7 +415,9 @@ export class ThreeScene {
       if (this.bodies.has(body.seat)) continue;
       // Corpses always render human: an infected corpse would publish the role.
       const g = buildFallen(body.seat, skin.get(body.seat) ?? 0);
-      g.position.copy(toScene(body.x, body.y));
+      const at = inset(body.x, body.y);
+      g.position.copy(toScene(at.x, at.y));
+      g.userData.at = at;
       this.scene.add(g);
       this.bodies.set(body.seat, g);
     }
@@ -397,6 +426,55 @@ export class ThreeScene {
       this.scene.remove(g);
       this.bodies.delete(seat);
     }
+  }
+
+  /**
+   * The living see a cone along their walk direction plus a small ring around
+   * them, both cut by walls; other crew, corpses and their plates outside it
+   * vanish. Ghosts and spectators see everything.
+   */
+  private applySight(me: PublicPlayer | null, dt: number): void {
+    const on = !!me && me.alive;
+    this.post.vision.enabled = on;
+    if (!me || !on) {
+      this.lookFrom = null;
+      for (const v of this.people.values()) this.showVis(v, true);
+      for (const g of this.bodies.values()) g.visible = true;
+      return;
+    }
+    if (!this.lookFrom) this.lookFrom = { x: me.x, y: me.y };
+    const dx = me.x - this.lookFrom.x, dy = me.y - this.lookFrom.y;
+    if (Math.hypot(dx, dy) > 0.4) {
+      const want = Math.atan2(dy, dx);
+      let d = (want - this.look) % (Math.PI * 2);
+      if (d > Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      this.look += d * Math.min(1, dt * 9);
+    }
+    this.lookFrom = { x: me.x, y: me.y };
+
+    for (const [seat, v] of this.people) {
+      // a little slack once seen, so a crewmate on the cone edge does not blink
+      if (seat !== this.bridge.mySeat) this.showVis(v, canSee(me.x, me.y, this.look, v.x, v.y, v.rig.root.visible ? 24 : 0));
+    }
+    for (const g of this.bodies.values()) {
+      const at = g.userData.at as { x: number; y: number };
+      g.visible = canSee(me.x, me.y, this.look, at.x, at.y, g.visible ? 24 : 0);
+    }
+
+    this.vision.update(this.renderer, me.x, me.y, this.look);
+    const u = this.post.vision.uniforms;
+    u.tMask.value = this.vision.target.texture;
+    u.uRect.value.copy(this.vision.rect);
+    const c = toScene(me.x, me.y);
+    u.uMe.value.set(c.x, c.z);
+    u.uRange.value = VISION.range / 18;
+  }
+
+  private showVis(v: Vis, on: boolean): void {
+    v.rig.root.visible = on;
+    const o = on ? '' : '0';
+    if (v.tag.style.opacity !== o) v.tag.style.opacity = o;
   }
 
   private updateStations(me: { x: number; y: number } | null, t: number): void {
@@ -423,7 +501,7 @@ export class ThreeScene {
       this.camAt.lerp(target, Math.min(1, dt * 7));
     }
     const c = this.camAt;
-    this.cam.position.set(c.x, 14, c.z + 12);
+    this.cam.position.set(c.x, CAM_UP + 0.6, c.z + 0.5 + CAM_BACK);
     this.cam.lookAt(c.x, 0.6, c.z + 0.5);
     this.cam.updateMatrixWorld();
     if (me) {

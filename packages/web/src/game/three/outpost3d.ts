@@ -299,16 +299,18 @@ export function buildOutpost(): Outpost {
     }
     part(root, geo('tableBase', () => new THREE.CylinderGeometry(0.9, 1.2, 0.8, 8)), mat(0x34403f), [cx, 0.4, cz]);
     part(root, geo('tableTop', () => new THREE.CylinderGeometry(1.7, 1.6, 0.18, 8)), mat(0x8fa3a3, 'metal', false), [cx, 0.88, cz]);
-    const holo = flat(TEAL, 0.25, true, 1).clone();
+    // kept under the bloom threshold: whoever stands at the table must stay readable
+    const holo = flat(TEAL, 0.18, true, 0.8).clone();
     part(root, geo('holo', () => new THREE.CylinderGeometry(1.1, 0.4, 1.4, 16, 1, true)), holo, [cx, 1.7, cz], [0, 0, 0], false);
-    pulses.push({ m: holo, base: 0.55, seed: 3 });
-    part(root, geo('holoCore', () => new THREE.OctahedronGeometry(0.32)), flat(0x8fe9dc, 1, false, 1.15), [cx, 1.9, cz], [0, 0, 0], false).name = 'holoCore';
-    part(root, geo('holoGlow', () => new THREE.PlaneGeometry(6, 6)), glowMat(TEAL, 0.2), [cx, 0.02, cz], [-Math.PI / 2, 0, 0], false);
-    // crates stacked at the pad's edge
-    for (const [x, y, s] of [[650, 490, 1.1], [672, 492, 0.8], [950, 710, 1.1], [655, 712, 0.9]] as const) {
+    pulses.push({ m: holo, base: 0.32, seed: 3 });
+    part(root, geo('holoCore', () => new THREE.OctahedronGeometry(0.32)), flat(0x8fe9dc, 1, false, 0.85), [cx, 1.9, cz], [0, 0, 0], false).name = 'holoCore';
+    part(root, geo('holoGlow', () => new THREE.PlaneGeometry(6, 6)), glowMat(TEAL, 0.1), [cx, 0.02, cz], [-Math.PI / 2, 0, 0], false);
+    // crates against the side walls, clear of the four corner doors
+    for (const [x, y, s] of [[636, 588, 1.1], [638, 610, 0.8], [964, 548, 1.1], [965, 652, 0.9]] as const) {
       part(root, geo(`crate${s}`, () => new THREE.BoxGeometry(s, s, s)), mat(0x7a6a4f, 'cloth'), at(x, y, s / 2));
     }
-    light(800, 600, 3.2, LAB, 60, 16);
+    // high above the table, not on top of it: a lamp at head height blew out whoever stood there
+    light(800, 600, 5.6, LAB, 100, 19);
   }
 
   // Lab A: bio-sample benches, sample racks, a centrifuge
@@ -374,7 +376,9 @@ export function buildOutpost(): Outpost {
   {
     const a = area('specimen');
     for (let i = 0; i < 3; i++) {
-      const [px, , pz] = at(a.x + 70 + i * 60, a.y + 60);
+      // pods recessed into the back wall: collision is rect only, so a free-standing pod got walked through
+      // (x picks skip the north door, where the path comes in)
+      const [px, , pz] = at(a.x + [40, 92, 330][i]!, a.y + 2);
       part(root, geo('tankBase', () => new THREE.CylinderGeometry(0.85, 0.95, 0.4, 16)), mat(0x3a4748), [px, 0.2, pz]);
       part(root, geo('tankCap', () => new THREE.CylinderGeometry(0.85, 0.85, 0.3, 16)), mat(0x8fa3a3, 'metal', false), [px, 2.55, pz]);
       part(root, geo('tankGlass', () => new THREE.CylinderGeometry(0.7, 0.7, 2.0, 16, 1, true)), flat(0x7fd8e0, 0.28, true), [px, 1.4, pz], [0, 0, 0], false);
