@@ -39,12 +39,34 @@ The 2026-11-02 16:30 session was OOM-killed by `next dev` (2.1 GB). So:
 - Check `free -m` before a build or a capture; if "available" is under 1500, wait or do non-build work.
 
 ## Art direction (binding)
+itachi, 2026-11-03 04:00: "upgrade the graphics and let it look more realistic". This overrides the toon
+look below wherever they conflict. Target: grounded, cinematic stylized-realism (think a premium indie
+3D game), NOT photoreal and NOT toon. Concretely:
+- Materials: replace MeshToonMaterial everywhere with MeshStandardMaterial / MeshPhysicalMaterial (PBR).
+  Real roughness/metalness per surface: brushed metal panels, rubberised suits, glass visors with
+  clearcoat, wet soil, waxy leaves. Procedural canvas textures for normal/roughness detail (panel seams,
+  grate holes, scuffs, dirt at wall bases, leaf veins). No downloaded asset packs.
+- Drop the 3-band ramp and the inverted-hull ink outline. Silhouettes now read through rim light,
+  contrast and ambient occlusion instead.
+- Lighting: renderer.toneMapping ACESFilmic, physically correct light intensities, PCFSoft shadows from
+  the key light and from the main room lights, warm lab spots that actually pool on floors, teal jungle
+  rim. A PMREM environment (RoomEnvironment or a generated night sky) so metal and glass reflect.
+- Post: EffectComposer with RenderPass, GTAOPass (or SAOPass), UnrealBloomPass (only lamps, consoles,
+  fireflies and Parasite green bloom), volumetric-feel exponential fog, subtle vignette, OutputPass, SMAA.
+- Jungle: denser and messier (varied scale/tilt/hue, vines over walls and rails, moss and puddles on
+  paths), so the outpost looks overgrown, not placed.
+- Crew: smoother higher-poly suits with seams, pockets, hoses and boot treads; keep the 10 seat colours,
+  accessories and forms. Toxic green still ONLY on the Parasite and infection.
+- Budget: must stay smooth in a normal laptop browser. Instance repeated geometry, cap shadow casters,
+  keep post at half resolution if needed. Readability in a 15 s clip beats realism if they ever conflict.
+- Cutoff still stands: playable by Wed 2026-11-04 22:00 Berlin, or stop polishing.
+
 Theme stays: jungle research outpost on planet Virelia, a crew of scientists, one hidden Parasite.
 Target feel: a polished modern indie game, not a jam prototype. Think cohesive top-down 2.5D with soft
 lighting, readable silhouettes, one strong palette (deep teal jungle night, warm lab lights, toxic green
 reserved ONLY for the Parasite and infection), animated idle/walk cycles, ambient particles (spores,
 fireflies, flickering lights), and a vignette/fog-of-war light radius around the player.
-- Characters: three.js procedural toon models (see Owner's call), with 4-direction walk cycles and 8+ distinct crew skins via color + accessory. Optional: grok-image-gen
+- Characters: three.js procedural PBR models (stylized-realism, see top of this section) (see Owner's call), with 4-direction walk cycles and 8+ distinct crew skins via color + accessory. Optional: grok-image-gen
   for concept references only; ship only assets you can keep consistent.
 - Map: one hand-designed outpost (lab, greenhouse, reactor, comms, medbay, docking pad) with walls,
   props, doors, lighting. Readable at a glance in a 15 s clip.
@@ -74,3 +96,4 @@ Append one line per session: date, what changed, commit hash, screenshot path, w
 - 2026-11-02 21:45: owner switched the renderer to three.js. Prototype shots/v2/three/crew-red.html (+ -sheet.png, -hero.png), vision 6.5/10. Not committed into the game yet. Next: step 1a.
 - 2026-11-02 (late): step 1a done. packages/web/src/game/three/crew3d.ts (buildCrew rig with 4 facings, walk + idle, all 10 seats/accessories, infected/parasite with tendrils + soft aura, buildFallen sprawled on an irregular non-green stain). Fixes vs prototype: welded smooth-normal ink hull (no shoulder/heel splits), concentric visor frame, helmet-hugging straps, lighter limbs on dark suits. three@0.180 added to web deps. Preview: packages/web/scripts/three-preview/shoot.sh (esbuild + puppeteer, no dev server). Commit 39a4bdf. Shots: shots/v2/three/crew3d-turnaround.png, crew3d-game.png (vision 8/10 game cam; corpse supine read still ~6). Next: step 1b, outpost map as 3D blocks.
 - 2026-11-03 (night): step 1b first pass. packages/web/src/game/three/outpost3d.ts (buildOutpost + addNightLights): raised deck rooms, walls/door gaps/rails sampled from shared AREAS + isWalkable (no hand data), consoles at TASK_STATIONS, per-room props (benches, racks + dish, planters + grow lamps, tanks + generator), flickering room lights with painted pools, 230 instanced jungle trees/ferns with ink hull, fireflies + spores, 4096 key-light shadow. Architecture drops the crew rim (it painted ortho faces cyan). Preview: scripts/three-preview/shoot-outpost.sh. Commit 86819b9. Shots: shots/v2/three/outpost-{overview,meeting,specimen,greenhouse}.png. Vision honest 5-6/10: layout and doors read, lighting still flat (warm pools faint, shadows soft, jungle too clean, a pale quad under one crew rig from crew3d). Next: step 1b polish (stronger warm pools/bloom-free emissive, overgrowth on walls and paths, crate shading, find the crew quad), then step 1c wire outpost + crew into the Phaser scene.
+- 2026-11-03 04:00: owner asked for more realistic graphics. Art direction switched from toon to PBR stylized-realism (see top of Art direction). Next run: realism pass on crew3d.ts + outpost3d.ts (materials, lights, shadows, post, overgrowth, crew rectangle bug), fresh screenshots with the same 4 outpost angles + crew game view, before step 1c.
