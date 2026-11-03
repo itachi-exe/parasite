@@ -151,6 +151,9 @@ export class GameRoom {
   private lastTickAt: number;
   /** Seat awaiting an ejection reveal, if any. */
   private pendingEjection: Seat | null = null;
+  /** Bot seats that currently hold the Parasite (simulated mode only), polled ~1/s. */
+  private botHosts = new Set<Seat>();
+  private botHostPollAt = 0;
 
   constructor(opts: GameRoomOptions) {
     this.code = opts.code;
@@ -430,6 +433,11 @@ export class GameRoom {
   private stepBots(now: number): Emit[] {
     const emits: Emit[] = [];
 
+    if (this.phase === 'playing' && now >= this.botHostPollAt && this.botSeats().length > 0) {
+      this.botHostPollAt = now + 1000;
+      void this.refreshBotHosts();
+    }
+
     for (const p of this.players.values()) {
       const b = p.bot;
       if (!b || !p.alive) {
@@ -468,6 +476,26 @@ export class GameRoom {
         continue;
       }
 
+      if (this.botHosts.has(p.seat)) {
+        // Parasite bot: strike a lone target, never report.
+        if (this.botPurge(p, now, emits)) continue;
+      } else if (this.bodies.length > 0) {
+        // Crew bot: a body in sight is reported, never ignored.
+        const body = this.bodies
+          .map((o) => ({ o, d: distance(p, o) }))
+          .sort((a, c) => a.d - c.d)[0]!;
+        if (body.d <= REPORT_BODY_RADIUS - 12) {
+          const { result, emits: e } = this.reportBody(p.id, body.o.seat);
+          if (result.ok) {
+            emits.push(...e);
+            return emits;
+          }
+        } else if (body.d <= 420) {
+          b.taskId = null;
+          b.target = { x: body.o.x, y: body.o.y };
+        }
+      }
+
       if (!b.target) this.retargetBot(p, b);
       if (!b.target) continue;
 
@@ -500,6 +528,35 @@ export class GameRoom {
     }
 
     return emits;
+  }
+
+  private async refreshBotHosts(): Promise<void> {
+    const next = new Set<Seat>();
+    for (const seat of this.botSeats()) {
+      if ((await this.readRoleForSeat(seat)) === true) next.add(seat);
+    }
+    this.botHosts = next;
+  }
+
+  /**
+   * Parasite bot attack: purge the nearest living player when nobody else
+   * could see it (no third player within 220 px). Goes through the public
+   * purge() so range, cooldown and win checks are the human rules.
+   * shortcut: bots never Jump (a jump into a human needs a role re-delivery
+   * from GameServer), upgrade with a 'roleChanged' emit.
+   */
+  private botPurge(p: RoomPlayer, now: number, emits: Emit[]): boolean {
+    if (now - p.lastPurgeAt < PURGE_COOLDOWN_MS) return false;
+    const alive = [...this.players.values()].filter((o) => o.alive && o.id !== p.id);
+    const near = alive.filter((o) => distance(p, o) <= PURGE_RANGE);
+    if (near.length === 0) return false;
+    const witnesses = alive.filter((o) => o.id !== near[0]!.id && distance(p, o) <= 220);
+    if (witnesses.length > 0 || Math.random() > 0.15) return false;
+    const { result, emits: e } = this.purge(p.id, near[0]!.seat);
+    if (!result.ok) return false;
+    emits.push(...e);
+    p.bot!.target = null;
+    return true;
   }
 
   /** Choose the next place a bot walks to: an unfinished task, else a wander. */

@@ -735,3 +735,21 @@ describe('GameRoom — role mode is never hidden', () => {
     expect(json).not.toMatch(/parasite.*true|isParasite|"role"/i);
   });
 });
+
+describe('GameRoom: bot behaviour', () => {
+  it('a crew bot standing at a body reports it', async () => {
+    const room = makeRoom();
+    fill(room, 1);
+    room.syncBots();
+    expect((await room.startGame('p0')).ok).toBe(true);
+    const bot = [...room.players.values()].find((p) => p.isBot && p.alive)!;
+    const victim = [...room.players.values()].find((p) => p.id !== bot.id)!;
+    room.bodies.push({ seat: victim.seat, x: bot.x + 10, y: bot.y });
+    victim.alive = false;
+    // LocalRoleOracle(() => 0) picks seat 0; make sure this bot is crew.
+    const emits = room.tick();
+    expect(await room.readRoleForSeat(bot.seat)).toBe(false);
+    expect(room.phase).toBe('meeting');
+    expect(emits.some((e) => e.type === 'meetingStarted')).toBe(true);
+  });
+});
