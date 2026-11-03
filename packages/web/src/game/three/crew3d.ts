@@ -147,7 +147,7 @@ function hullOf(geo: THREE.BufferGeometry): THREE.BufferGeometry {
 }
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
-function geo<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
+export function geo<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
   let g = geoCache.get(key);
   if (!g) {
     g = make();
@@ -168,7 +168,7 @@ type V3 = [number, number, number];
 const band = (r: number, from: number, len: number) =>
   geo(`band${r}:${from}:${len}`, () => new THREE.SphereGeometry(r, 36, 3, 0, Math.PI * 2, from, len));
 /** Mesh plus its ink hull. `ink` false for decals, glows and tiny details. */
-function part(
+export function part(
   parent: THREE.Object3D,
   g: THREE.BufferGeometry,
   m: THREE.Material,
