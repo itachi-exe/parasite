@@ -2225,3 +2225,28 @@ button.role-badge.needs-wallet .role-main {
   font-size: 10px;
   opacity: 0.75;
 }
+
+/* three.js stage overlay: name plates and the touch stick (DOM, not WebGL) */
+.stage-tags { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.stage-tag {
+  position: absolute; left: 0; top: 0; white-space: nowrap;
+  padding: 3px 8px; border-radius: 999px;
+  font: 500 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em;
+  color: #f5f5f3; background: rgba(7, 12, 14, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  will-change: transform;
+}
+.stage-tag.me { color: #1a1206; background: rgba(255, 214, 160, 0.92); border-color: rgba(255, 226, 184, 0.6); font-weight: 600; }
+.stage-tag.away { opacity: 0.55; }
+.stage-stick {
+  position: absolute; left: 0; top: 0; width: 108px; height: 108px; border-radius: 999px;
+  background: rgba(7, 12, 14, 0.45); border: 1px solid rgba(255, 255, 255, 0.12);
+  pointer-events: none; opacity: 0; transition: opacity 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.stage-stick.on { opacity: 1; }
+.stage-stick-knob {
+  position: absolute; left: 32px; top: 32px; width: 44px; height: 44px; border-radius: 999px;
+  background: rgba(245, 245, 243, 0.85); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+@media (prefers-reduced-motion: reduce) { .stage-stick { transition: none; } }
