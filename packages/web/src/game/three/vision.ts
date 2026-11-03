@@ -19,6 +19,8 @@ export const VISION = {
   /** Half the cone angle, and the angular blend at its edge (radians). */
   half: 0.72,
   soft: 0.2,
+  /** Half width (radians) of the drawn cone edge in post.ts, inside the canSee blend so nobody stands lit but hidden. */
+  edge: 0.09,
   rays: 256,
   /** Rays continue this far past the hit, so the face of the wall reads. */
   pad: 14,
@@ -106,7 +108,8 @@ export class VisionMask {
     this.pos[1] = c.z;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
-      const reach = reachAt(a, look);
+      // occlusion only: post.ts draws the cone's falloff and rim, so the polygon needs no soft shoulder
+      const reach = Math.abs(angDiff(a, look)) < VISION.half + VISION.edge + 0.1 ? VISION.range : VISION.ambient;
       const len = Math.min(reach, rayLength(x, y, a, reach) + VISION.pad);
       this.pos[3 + i * 3] = (x + Math.cos(a) * len - WORLD_WIDTH / 2) / PX;
       this.pos[4 + i * 3] = (y + Math.sin(a) * len - WORLD_HEIGHT / 2) / PX;

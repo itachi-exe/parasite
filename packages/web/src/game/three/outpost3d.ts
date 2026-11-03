@@ -257,8 +257,8 @@ export function buildOutpost(): Outpost {
           const q = e.horiz ? toScene(end, e.fixed + off) : toScene(e.fixed + off, end);
           const ph = Math.max(h, 1.6) + 0.3;
           part(root, geo(`pillar${ph}`, () => new THREE.BoxGeometry(0.5, ph, 0.5)), mat(0x3a4748), [q.x, ph / 2, q.z]);
-          part(root, geo('lampcap', () => new THREE.BoxGeometry(0.36, 0.16, 0.36)), flat(WARM, 1, false, 2.4), [q.x, ph + 0.08, q.z], [0, 0, 0], false);
-          part(root, geo('postPool', () => new THREE.PlaneGeometry(3.6, 3.6)), glowMat(WARM, 0.18), [q.x, 0.03, q.z], [-Math.PI / 2, 0, 0], false);
+          part(root, geo('lampcap', () => new THREE.BoxGeometry(0.36, 0.16, 0.36)), flat(0xff9f4a, 1, false, 1.1), [q.x, ph + 0.08, q.z], [0, 0, 0], false);
+          part(root, geo('postPool', () => new THREE.PlaneGeometry(3.6, 3.6)), glowMat(WARM, 0.11), [q.x, 0.03, q.z], [-Math.PI / 2, 0, 0], false);
         }
       }
     }

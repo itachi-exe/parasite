@@ -472,6 +472,8 @@ export class ThreeScene {
     const c = toScene(me.x, me.y);
     u.uMe.value.set(c.x, c.z);
     u.uRange.value = VISION.range / 18;
+    u.uDir.value.set(Math.cos(this.look), Math.sin(this.look));
+    u.uCone.value.set(VISION.half, VISION.edge, VISION.ambient / 18);
   }
 
   private showVis(v: Vis, on: boolean): void {

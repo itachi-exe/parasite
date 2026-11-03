@@ -63,6 +63,9 @@ export class VisionPass extends Pass {
     uCamWorld: { value: new THREE.Matrix4() },
     uMe: { value: new THREE.Vector2() },
     uRange: { value: 20 },
+    /** Facing unit vector in scene xz, cone half angle and edge width (rad), ambient radius (scene units). */
+    uDir: { value: new THREE.Vector2(1, 0) },
+    uCone: { value: new THREE.Vector3(0.72, 0.12, 4.3) },
     uTexel: { value: new THREE.Vector2(1 / 512, 1 / 384) },
     uFog: { value: new THREE.Color(NIGHT) }, // hex is converted to linear on construction
   };
@@ -73,7 +76,7 @@ export class VisionPass extends Pass {
       uniforms: this.uniforms,
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
       fragmentShader: `uniform sampler2D tDiffuse, tDepth, tMask; uniform vec4 uRect; uniform mat4 uProjInv, uCamWorld;
-        uniform vec2 uMe, uTexel; uniform float uRange; uniform vec3 uFog; varying vec2 vUv;
+        uniform vec2 uMe, uTexel, uDir; uniform vec3 uCone; uniform float uRange; uniform vec3 uFog; varying vec2 vUv;
         float mask(vec2 uv){ return texture2D(tMask, uv).r; }
         void main(){
           vec4 c = texture2D(tDiffuse, vUv);
@@ -81,16 +84,32 @@ export class VisionPass extends Pass {
           vec4 v = uProjInv * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
           vec3 wp = (uCamWorld * vec4(v.xyz / v.w, 1.0)).xyz;
           vec2 uv = (wp.xz - uRect.xy) / uRect.zw;
-          // two rings of taps: a soft penumbra about one metre wide
+          // the mask is only occlusion (walls); two rings of taps soften it to a one metre penumbra
           float m = mask(uv) * 0.2;
           for (int i = 0; i < 8; i++) {
             float a = float(i) * 0.785398;
             vec2 o = vec2(cos(a), sin(a)) * uTexel;
             m += mask(uv + o * 3.0) * 0.05 + mask(uv + o * 6.5) * 0.05;
           }
-          float far = 1.0 - smoothstep(uRange * 0.72, uRange, length(wp.xz - uMe));
-          float vis = d >= 1.0 ? 0.0 : smoothstep(0.0, 1.0, m) * far;
-          gl_FragColor = vec4(mix(c.rgb * 0.03 + uFog * 0.8, c.rgb, vis), c.a);
+          float occ = smoothstep(0.0, 1.0, m);
+          // the cone's shape lives here, per pixel: a crisp angular edge from the apex, range falloff, a small ring
+          vec2 rel = wp.xz - uMe;
+          float dist = length(rel);
+          float ang = acos(clamp(dot(rel / max(dist, 1e-4), uDir), -1.0, 1.0));
+          float cone = 1.0 - smoothstep(uCone.x - uCone.y, uCone.x + uCone.y, ang);
+          float reach = 1.0 - smoothstep(uRange * 0.62, uRange, dist);
+          // the ring around me is dimmer than the beam beyond a body length, so the apex reads at my feet
+          float ring = max(1.0 - smoothstep(1.0, 2.0, dist), 0.55 * (1.0 - smoothstep(uCone.z * 0.55, uCone.z, dist)));
+          float beam = cone * reach;
+          float vis = d >= 1.0 ? 0.0 : occ * max(ring, beam);
+          // rim: a thin lift just inside the cone edge, so the wedge reads as a beam, not a pool
+          float rim = smoothstep(uCone.x - uCone.y * 3.0, uCone.x - uCone.y * 0.5, ang) * beam * occ * smoothstep(1.0, 3.0, dist);
+          // fog keeps a faint read of the floor; emissives are compressed so lamps out of sight stop shining
+          float l = max(c.r, max(c.g, c.b));
+          vec3 fogged = uFog * 0.88 + c.rgb / (1.0 + l * 12.0) * 0.14;
+          vec3 lit = c.rgb * (1.0 + 0.16 * beam * occ * (1.0 - dist / uRange));
+          vec3 col = mix(fogged, lit, vis) + (c.rgb * 0.35 + vec3(0.012, 0.015, 0.016)) * rim;
+          gl_FragColor = vec4(col, c.a);
         }`,
       depthTest: false,
       depthWrite: false,
