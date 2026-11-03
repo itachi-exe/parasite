@@ -258,3 +258,17 @@ describe('LocalRoleOracle', () => {
     await expect(o.revealHostSeat({ gameId: 'nope' })).rejects.toThrow();
   });
 });
+
+import { canSee, VISION } from './index.js';
+describe('vision rules', () => {
+  const x = SPAWN_CENTER.x, y = SPAWN_CENTER.y;
+  it('cone is 70 degrees', () => expect(VISION.half * 2 * (180 / Math.PI)).toBeCloseTo(70));
+  it('sees ahead, not 60deg off at range', () => {
+    expect(canSee(x, y, 0, x + 120, y)).toBe(true);
+    expect(canSee(x, y, 0, x + 120 * Math.cos(1.05), y + 120 * Math.sin(1.05))).toBe(false);
+  });
+  it('proximity circle sees behind', () => {
+    expect(canSee(x, y, 0, x - 60, y)).toBe(true);
+    expect(canSee(x, y, 0, x - 150, y)).toBe(false);
+  });
+});
