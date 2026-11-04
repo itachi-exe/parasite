@@ -19,7 +19,7 @@ import {
   type Seat,
   type TaskId,
 } from '@parasite/shared';
-import type { SceneBridge } from '../bridge';
+import { playersInSight, type LocatedPlayer, type SceneBridge } from '../bridge';
 import { buildCrew, buildFallen, glowMat, geo, type CrewRig, type Facing4 } from './crew3d';
 import { buildOutpost, addNightLights, toScene } from './outpost3d';
 import { setupRenderer, setupEnvironment, makePost, type Post } from './post';
@@ -108,7 +108,7 @@ export class ThreeScene {
   private playerLight = new THREE.PointLight(0xffe2b8, 2.2, 7, 2);
   private keys = new Set<string>();
   private stick = { id: null as number | null, ox: 0, oy: 0, ax: 0, ay: 0 };
-  private lastSent = { ax: 0, ay: 0, at: 0 };
+  private lastSent = { ax: 0, ay: 0, at: 0, look: Math.PI / 2 };
   private predicted: { x: number; y: number } | null = null;
   private vision = new VisionMask();
   /** Where my sight cone points, world radians (0 = +x, PI/2 = down the screen). */
@@ -310,17 +310,14 @@ export class ThreeScene {
     const b = this.bridge;
     const [ax, ay] = this.readInput();
     const nowMs = t * 1000;
-    if (ax !== this.lastSent.ax || ay !== this.lastSent.ay || (nowMs - this.lastSent.at > 120 && (ax || ay))) {
-      b.onInput(ax, ay);
-      this.lastSent = { ax, ay, at: nowMs };
+    if (ax !== this.lastSent.ax || ay !== this.lastSent.ay || Math.abs(this.look - this.lastSent.look) > 0.02 || (nowMs - this.lastSent.at > 120 && (ax || ay))) {
+      b.onInput(ax, ay, Math.cos(this.look), Math.sin(this.look));
+      this.lastSent = { ax, ay, at: nowMs, look: this.look };
     }
 
-    const players = b.players.map((p) => {
-      const live = b.positions.get(p.seat);
-      return live ? { ...p, ...live } : p;
-    });
+    const players = playersInSight(b.players, b.positions);
     const seen = new Set<Seat>();
-    let me: PublicPlayer | null = null;
+    let me: LocatedPlayer | null = null;
 
     for (let p of players) {
       const isMe = p.seat === b.mySeat;
@@ -380,7 +377,7 @@ export class ThreeScene {
       this.people.delete(seat);
     }
 
-    this.syncBodies(players);
+    this.syncBodies(b.players);
     this.applySight(me, dt);
     this.outpost.update(this.still ? 2 : t);
     this.updateStations(me, t);
@@ -388,7 +385,7 @@ export class ThreeScene {
     this.placeTags();
   }
 
-  private predict(p: PublicPlayer, ax: number, ay: number, dt: number): PublicPlayer {
+  private predict(p: LocatedPlayer, ax: number, ay: number, dt: number): LocatedPlayer {
     if (!this.predicted) this.predicted = { x: p.x, y: p.y };
     const pr = this.predicted;
     if (!this.bridge.frozen && (ax || ay)) {
@@ -436,7 +433,7 @@ export class ThreeScene {
    * them, both cut by walls; other crew, corpses and their plates outside it
    * vanish. Ghosts and spectators see everything.
    */
-  private applySight(me: PublicPlayer | null, dt: number): void {
+  private applySight(me: LocatedPlayer | null, dt: number): void {
     const on = !!me && me.alive;
     this.post.vision.enabled = on;
     if (!me || !on) {

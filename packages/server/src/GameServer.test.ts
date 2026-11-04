@@ -310,6 +310,75 @@ describe('GameServer (socket integration)', () => {
     s.disconnect();
   });
 
+  it('redacts hidden locations on every state and positions delivery', async () => {
+    const code = 'SIGHTWIRE';
+    const sockets = Array.from({ length: MIN_PLAYERS }, () => connect());
+    for (const [i, s] of sockets.entries()) await join(s, `Sight${i}`, code);
+    await new Promise((res) => sockets[0]!.emit('startGame', res));
+    const room = game.roomFor(code)!;
+    const viewer = room.players.get(sockets[0]!.id!)!;
+    const hidden = room.players.get(sockets[1]!.id!)!;
+    viewer.x = 800; viewer.y = 600;
+    hidden.x = 800; hidden.y = 480; // Behind the default down-facing cone.
+    const stateEv = once<any>(sockets[0]!, 'state');
+    const positionsEv = once<any>(sockets[0]!, 'positions');
+    const ack = await new Promise<any>((res) => sockets[0]!.emit(
+      'completeTask', { taskId: 'upload-research-data' }, res
+    ));
+    expect(ack.ok).toBe(true);
+    const state = await stateEv;
+    const packet = await positionsEv;
+    expect(state.players).toHaveLength(MIN_PLAYERS);
+    expect(state.players.find((p: any) => p.seat === hidden.seat)).toMatchObject({ x: null, y: null });
+    expect(packet.p.some((p: any) => p.s === hidden.seat)).toBe(false);
+    expect(packet.p.find((p: any) => p.s === viewer.seat)).toMatchObject({ x: 800, y: 600 });
+    for (const s of sockets) s.disconnect();
+  });
+
+  it('streams bodies as sight changes without a structural event', async () => {
+    const code = 'BODYSIGHTWIRE';
+    const sockets = Array.from({ length: MIN_PLAYERS }, () => connect());
+    for (const [i, s] of sockets.entries()) await join(s, `Body${i}`, code);
+    await new Promise((res) => sockets[0]!.emit('startGame', res));
+    const room = game.roomFor(code)!;
+    const viewer = room.players.get(sockets[0]!.id!)!;
+    const victim = room.players.get(sockets[1]!.id!)!;
+    viewer.x = 800; viewer.y = 600;
+    victim.x = 800; victim.y = 480; victim.alive = false;
+    const body = { seat: victim.seat, x: 800, y: 480 };
+    room.bodies = [body];
+    expect((await once<any>(sockets[0]!, 'positions')).b).toEqual([]);
+    sockets[0]!.emit('input', { ax: 0, ay: 0, fx: 0, fy: -5, seq: 1 });
+    await new Promise((r) => setTimeout(r, 60));
+    expect((await once<any>(sockets[0]!, 'positions')).b).toEqual([body]);
+    const stateEv = once<any>(sockets[0]!, 'state');
+    await new Promise((res) => sockets[0]!.emit('completeTask', { taskId: 'upload-research-data' }, res));
+    const state = await stateEv;
+    expect(state.bodies).toEqual([body]);
+    expect(state.players.find((p: any) => p.seat === victim.seat)).toMatchObject({ x: null, y: null });
+    sockets[0]!.emit('input', { ax: 0, ay: 0, fx: 0, fy: 1, seq: 2 });
+    await new Promise((r) => setTimeout(r, 60));
+    expect((await once<any>(sockets[0]!, 'positions')).b).toEqual([]);
+    for (const s of sockets) s.disconnect();
+  });
+
+  it('does not put corpse coordinates in the global purge notice', async () => {
+    const code = 'PURGENOTICE';
+    const sockets = Array.from({ length: MIN_PLAYERS }, () => connect());
+    for (const [i, s] of sockets.entries()) await join(s, `Purge${i}`, code);
+    await new Promise((res) => sockets[0]!.emit('startGame', res));
+    const room = game.roomFor(code)!;
+    const killer = room.players.get(sockets[0]!.id!)!;
+    const victim = room.players.get(sockets[1]!.id!)!;
+    killer.x = 800; killer.y = 480;
+    victim.x = 810; victim.y = 480;
+    const notice = once<any>(sockets[2]!, 'playerPurged');
+    const ack = await new Promise<any>((res) => sockets[0]!.emit('purge', { targetSeat: victim.seat }, res));
+    expect(ack.ok).toBe(true);
+    expect(await notice).toEqual({ victimSeat: victim.seat });
+    for (const s of sockets) s.disconnect();
+  });
+
   it('surfaces role mode in the state broadcast', async () => {
     const ROOM = 'MODETEST';
     const s = connect();

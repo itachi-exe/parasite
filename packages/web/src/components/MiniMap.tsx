@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { MAP_WIDTH, MAP_HEIGHT, ROOMS, type PublicPlayer, type Seat } from '@parasite/shared';
+import { playersInSight, type LivePosition } from '../game/bridge';
 
 const W = 168;
 const H = Math.round((MAP_HEIGHT / MAP_WIDTH) * W);
@@ -12,6 +13,7 @@ const H = Math.round((MAP_HEIGHT / MAP_WIDTH) * W);
  */
 export default function MiniMap(props: {
   players: PublicPlayer[];
+  positions: Map<Seat, LivePosition>;
   mySeat: Seat | null;
   bodies: { seat: Seat; x: number; y: number }[];
   /** Current area name, captioned under the dial (DESIGN.md §4). */
@@ -40,14 +42,14 @@ export default function MiniMap(props: {
             ctx.fillRect(r.x * sx, r.y * sy, r.w * sx, r.h * sy);
           }
 
-          const { players, mySeat, bodies } = data.current;
+          const { players, positions, mySeat, bodies } = data.current;
 
           ctx.fillStyle = '#ff5f7e';
           for (const b of bodies) {
             ctx.fillRect(b.x * sx - 1.5, b.y * sy - 1.5, 3, 3);
           }
 
-          for (const p of players) {
+          for (const p of playersInSight(players, positions)) {
             if (!p.alive) continue;
             const isMe = p.seat === mySeat;
             ctx.beginPath();

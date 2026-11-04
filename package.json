@@ -20,7 +20,7 @@
     "dev:server": "npm run dev -w @parasite/server",
     "dev:web": "npm run dev -w @parasite/web",
     "build": "npm run build:shared && npm run build -w @parasite/server && npm run build -w @parasite/web",
-    "test": "npm run test -w @parasite/shared && npm run test -w @parasite/server && npm run test -w @parasite/contracts",
+    "test": "npm run test -w @parasite/shared && npm run test -w @parasite/server && npm run test -w @parasite/contracts && npm run test -w @parasite/web",
     "test:shared": "npm run test -w @parasite/shared",
     "test:server": "npm run test -w @parasite/server",
     "test:contracts": "npm run test -w @parasite/contracts",

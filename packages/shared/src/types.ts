@@ -48,8 +48,9 @@ export interface PublicPlayer {
   skin: SkinId;
   /** Wallet address if connected, else null. Needed to grant Inco access. */
   address: string | null;
-  x: number;
-  y: number;
+  /** Null when this recipient is not entitled to the location. Roster metadata stays public. */
+  x: number | null;
+  y: number | null;
   /** Facing, for sprite flip. */
   dir: -1 | 1;
   moving: boolean;
@@ -164,7 +165,7 @@ export interface ClientToServerEvents {
     ack: (res: JoinResult) => void
   ) => void;
   /** Continuous movement input. Direction is normalized server-side. */
-  input: (payload: { ax: number; ay: number; seq: number }) => void;
+  input: (payload: { ax: number; ay: number; seq: number; fx?: number; fy?: number }) => void;
   startGame: (ack: (res: SimpleResult) => void) => void;
   taskProgress: (
     payload: { taskId: TaskId; progress: number },
@@ -205,15 +206,20 @@ export interface ClientToServerEvents {
   leaveLobby: (ack: (res: SimpleResult) => void) => void;
 }
 
+/** Complete replacement of the recipient's current visible locations, not a delta. */
+export interface PositionsPayload {
+  t: number;
+  p: { s: Seat; x: number; y: number; d: -1 | 1; m: boolean }[];
+  b: RoomState['bodies'];
+}
+
 // ── Server → Client ──────────────────────────────────────────────────────────
 
 export interface ServerToClientEvents {
   /** Full authoritative snapshot. Sent on any structural change. */
   state: (state: RoomState) => void;
-  /** High-frequency positions only, to keep the 20Hz tick cheap. */
-  positions: (
-    payload: { t: number; p: { s: Seat; x: number; y: number; d: -1 | 1; m: boolean }[] }
-  ) => void;
+  /** Complete per-recipient player/body sight, refreshed at the tick rate. */
+  positions: (payload: PositionsPayload) => void;
   /** You are this player. Sent once on join. */
   you: (payload: { id: PlayerId; seat: Seat }) => void;
   /**
@@ -237,7 +243,7 @@ export interface ServerToClientEvents {
    */
   simulatedRole: (payload: { isParasite: boolean }) => void;
   /** Someone died. Public — everyone sees the body eventually. */
-  playerPurged: (payload: { victimSeat: Seat; x: number; y: number }) => void;
+  playerPurged: (payload: { victimSeat: Seat }) => void;
   toast: (payload: { kind: 'info' | 'warn' | 'error'; text: string }) => void;
   kicked: (payload: { reason: string }) => void;
   chat: (payload: ChatMessage) => void;

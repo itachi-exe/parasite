@@ -6,7 +6,8 @@
     "dev": "next dev -p 9100 -H 127.0.0.1",
     "build": "next build",
     "start": "next start -p 9100 -H 127.0.0.1",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/game/*.test.ts"
   },
   "dependencies": {
     "@inco/lightning-js": "^1.0.2",

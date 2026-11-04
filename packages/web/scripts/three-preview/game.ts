@@ -1,7 +1,7 @@
 // ThreeScene driven by a fake bridge, rendered headless (no dev server, no server).
 // ?mode=meeting|specimen|ghost  ?w= tests a narrow viewport via the page size
 import { ThreeScene } from '../../src/game/three/ThreeScene';
-import type { SceneBridge } from '../../src/game/bridge';
+import { replaceSnapshot, type SceneBridge } from '../../src/game/bridge';
 import { TASK_IDS, type PublicPlayer } from '@parasite/shared';
 
 const mode = new URLSearchParams(location.search).get('mode') ?? 'meeting';
@@ -26,6 +26,7 @@ const bridge: SceneBridge = {
   frozen: false,
   onInput: () => {},
 };
+replaceSnapshot(bridge.positions, bridge);
 // the living walk a step first so the sight cone has a direction (?look=up|down|left|right)
 const look = new URLSearchParams(location.search).get('look') ?? (mode === 'specimen' ? 'up' : 'right');
 const step = ({ up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] } as Record<string, number[]>)[look] ?? [1, 0];

@@ -24,6 +24,7 @@ import {
   resolveMove,
   distance,
   tallyVotes,
+  canSee,
   type PlayerId,
   type Seat,
   type SkinId,
@@ -39,6 +40,10 @@ import {
 } from '@parasite/shared';
 
 export interface RoomPlayer extends PublicPlayer {
+  x: number;
+  y: number;
+  /** Persisted world heading, initially down. Never supplied as a viewer identity. */
+  look: number;
   /** Which of this player's tasks are done. */
   tasks: Set<TaskId>;
   /** Server-side input state. */
@@ -208,6 +213,7 @@ export class GameRoom {
       address: address ?? null,
       x: SPAWN_CENTER.x + Math.cos(angle) * SPAWN_RADIUS,
       y: SPAWN_CENTER.y + Math.sin(angle) * SPAWN_RADIUS,
+      look: Math.PI / 2,
       dir: 1,
       moving: false,
       alive: true,
@@ -397,6 +403,7 @@ export class GameRoom {
       address: null,
       x: SPAWN_CENTER.x + Math.cos(angle) * SPAWN_RADIUS,
       y: SPAWN_CENTER.y + Math.sin(angle) * SPAWN_RADIUS,
+      look: Math.PI / 2,
       dir: 1,
       moving: false,
       alive: true,
@@ -608,9 +615,16 @@ export class GameRoom {
 
   // ── Movement ───────────────────────────────────────────────────────────────
 
-  setInput(id: PlayerId, ax: number, ay: number): void {
+  setInput(id: PlayerId, ax: number, ay: number, fx?: number, fy?: number): void {
     const p = this.players.get(id);
     if (!p || !p.alive) return;
+    if (!Number.isFinite(ax) || !Number.isFinite(ay)) return;
+    const facingLength = Math.hypot(fx ?? 0, fy ?? 0);
+    if (Number.isFinite(fx) && Number.isFinite(fy) && Number.isFinite(facingLength) && facingLength > 0) {
+      p.look = Math.atan2(fy! / facingLength, fx! / facingLength);
+    } else if (fx === undefined && fy === undefined && (ax || ay)) {
+      p.look = Math.atan2(ay, ax);
+    }
     // Normalize so diagonal movement is not faster.
     const len = Math.hypot(ax, ay);
     if (len > 1) {
@@ -657,6 +671,7 @@ export class GameRoom {
 
         const resolved = resolveMove(p.x, p.y, nx, ny);
         p.moving = resolved.x !== p.x || resolved.y !== p.y;
+        if (p.isBot && p.moving) p.look = Math.atan2(resolved.y - p.y, resolved.x - p.x);
         if (p.ax !== 0) p.dir = p.ax > 0 ? 1 : -1;
         p.x = resolved.x;
         p.y = resolved.y;
@@ -1122,11 +1137,36 @@ export class GameRoom {
     };
   }
 
-  positionsPayload() {
+  /** Membership is checked before the phase/ghost exemptions. */
+  canSeePoint(viewerId: PlayerId, x: number, y: number): boolean {
+    const viewer = this.players.get(viewerId);
+    if (!viewer) return false;
+    if (!viewer.alive || this.phase !== 'playing') return true;
+    // Inco has no verified private-role mechanism: use the shared human reach,
+    // never a client-declared role/radius. Larger private-role reach is gated.
+    return canSee(viewer.x, viewer.y, viewer.look, x, y);
+  }
+
+  /** Wire snapshot: retain the complete ordered roster, redact hidden coordinates. */
+  stateFor(viewerId: PlayerId): RoomState {
+    const viewer = this.players.get(viewerId);
+    const state = this.toState();
+    state.players = state.players.map((p) => {
+      const located = viewer && (p.alive || p.id === viewerId || !viewer.alive || this.phase === 'ended')
+        && this.canSeePoint(viewerId, p.x!, p.y!);
+      return located ? p : { ...p, x: null, y: null };
+    });
+    state.bodies = state.bodies.filter((b) => this.canSeePoint(viewerId, b.x, b.y));
+    return state;
+  }
+
+  positionsPayload(viewerId: PlayerId) {
     return {
       t: this.now(),
+      b: this.bodies.filter((b) => this.canSeePoint(viewerId, b.x, b.y)),
       p: [...this.players.values()]
-        .filter((p) => p.alive)
+        .filter((p) => (p.alive || p.id === viewerId) &&
+          (p.id === viewerId || this.canSeePoint(viewerId, p.x, p.y)))
         .map((p) => ({
           s: p.seat,
           x: Math.round(p.x),

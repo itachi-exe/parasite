@@ -18,7 +18,7 @@ export default function GameStage(props: {
   mySeat: Seat | null;
   positions: Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>;
   isParasite: boolean;
-  onInput: (ax: number, ay: number) => void;
+  onInput: (ax: number, ay: number, fx?: number, fy?: number) => void;
   inputEnabled: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);

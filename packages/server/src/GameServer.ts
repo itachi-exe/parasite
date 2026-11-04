@@ -5,7 +5,6 @@ import {
   LocalRoleOracle,
   type ClientToServerEvents,
   type ServerToClientEvents,
-  type RoomState,
 } from '@parasite/shared';
 import { GameRoom, type Emit, type MeetingTimings } from './GameRoom.js';
 
@@ -114,7 +113,7 @@ export class GameServer {
         ack?.({
           ok: true,
           you: { id: player.id, seat: player.seat },
-          state: room.toState(),
+          state: room.stateFor(socket.id),
         });
         this.broadcastState(room);
       });
@@ -141,7 +140,7 @@ export class GameServer {
 
       socket.on('input', (payload) => {
         const room = this.roomOf(socket);
-        room?.setInput(socket.id, payload?.ax ?? 0, payload?.ay ?? 0);
+        room?.setInput(socket.id, payload?.ax ?? 0, payload?.ay ?? 0, payload?.fx, payload?.fy);
       });
 
       socket.on('completeTask', (payload, ack) => {
@@ -409,8 +408,11 @@ export class GameServer {
 
   private broadcastState(room: GameRoom): void {
     if (!this.rooms.has(room.code)) return;
-    const state: RoomState = room.toState();
-    this.io.to(room.code).emit('state', state);
+    for (const p of room.players.values()) {
+      if (!p.isBot && p.connected && this.socketRoom.get(p.id) === room.code) {
+        this.io.to(p.id).emit('state', room.stateFor(p.id));
+      }
+    }
   }
 
   /** Fan out a batch of room emits, then run any follow-up local resolution. */
@@ -435,8 +437,6 @@ export class GameServer {
         case 'playerPurged':
           this.io.to(room.code).emit('playerPurged', {
             victimSeat: e.victimSeat,
-            x: e.x,
-            y: e.y,
           });
           break;
         case 'toast':
@@ -472,8 +472,11 @@ export class GameServer {
           (room.phase === 'playing' || room.phase === 'meeting') &&
           this.tickCount % every === 0
         ) {
-          const pp = room.positionsPayload();
-          this.io.to(room.code).emit('positions', pp);
+          for (const p of room.players.values()) {
+            if (!p.isBot && p.connected && this.socketRoom.get(p.id) === room.code) {
+              this.io.to(p.id).emit('positions', room.positionsPayload(p.id));
+            }
+          }
         }
       }
     }, TICK_MS);

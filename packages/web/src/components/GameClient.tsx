@@ -243,7 +243,8 @@ export default function GameClient() {
     let best: { seat: Seat; d: number } | null = null;
     for (const p of state.players) {
       if (p.seat === mySeat || !p.alive) continue;
-      const pos = positions.get(p.seat) ?? p;
+      const pos = positions.get(p.seat);
+      if (!pos) continue;
       const d = distance(myPos, pos);
       if (!best || d < best.d) best = { seat: p.seat, d };
     }
@@ -497,6 +498,7 @@ export default function GameClient() {
         {showMap && state && (
           <MiniMap
             players={state.players}
+            positions={positions}
             mySeat={mySeat}
             bodies={state.bodies}
             room={myArea}

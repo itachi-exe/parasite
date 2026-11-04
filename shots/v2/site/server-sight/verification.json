@@ -1,0 +1,83 @@
+{
+  "task": "Authoritative per-recipient sight for Parasite v2",
+  "baseline_commit": "ebd6dce",
+  "model_evidence": {
+    "session_id": "20261104_043542_b89383",
+    "model": "gpt-6.1-sol",
+    "provider": "custom:agentrouter",
+    "verified_from": "Hermes session_model_usage readback",
+    "api_call_count": 47
+  },
+  "implementation": [
+    "Joined socket identity selects the recipient, with missing viewers denied before phase or ghost exceptions.",
+    "Playing snapshots redact unseen player coordinates and dead-player locations; fast packets replace the entire visible player/body set.",
+    "Facing vectors are finite and normalized; all roles retain the existing shared range of 380 px, a 70-degree cone and a 78-px proximity pool.",
+    "Bodies refresh on turning/movement ticks; renderer, minimap and proximity cannot revive omitted locations from stale snapshots.",
+    "Global purge notices contain no corpse coordinates; roster metadata remains complete."
+  ],
+  "tests": {
+    "shared": 29,
+    "server": 68,
+    "contracts_local": 45,
+    "web": 4,
+    "total_passed": 146,
+    "command": "npm test",
+    "root_typecheck": "passed",
+    "production_build": "passed with NODE_OPTIONS=--max-old-space-size=1024 and CIRCLE_NODE_TOTAL=2 (one Next worker); preview URL bound to ports 9200/9201 only"
+  },
+  "browser_smoke": {
+    "fixture": "Four-player deterministic local simulation, real UI/socket start, movement, purge, report and votes. Not a ten-minute-round proof.",
+    "screenshots": [],
+    "pageErrors": [],
+    "seats": {
+      "Wren": 0,
+      "Mara": 4,
+      "Rhee": 5,
+      "Kenji": 6
+    },
+    "result": {
+      "started": true,
+      "realMovement": true,
+      "hiddenSnapshot": true,
+      "bodyTurnEviction": true,
+      "hiddenPlateEviction": true,
+      "bodyReportedFromUI": true,
+      "bothTabsVoted": true,
+      "resumed": true,
+      "positionPackets": 1406
+    }
+  },
+  "screenshots": [
+    {
+      "path": "shots/v2/site/server-sight/living-down.png",
+      "bytes": 332473,
+      "width": 1280,
+      "height": 720,
+      "sha256": "39ccb23bc6c2bd786000c797486ce2ad4918d017c1c614a59f74911523503e56"
+    },
+    {
+      "path": "shots/v2/site/server-sight/living-up.png",
+      "bytes": 327874,
+      "width": 1280,
+      "height": 720,
+      "sha256": "955ff2489b418d0e06b2228b3a675d524f48b9eca9f0a1ad986834808aa57854"
+    },
+    {
+      "path": "shots/v2/site/server-sight/body-report-meeting.png",
+      "bytes": 104194,
+      "width": 1280,
+      "height": 720,
+      "sha256": "aecdb38e62af02209e20e5eee1397179caf1605c2b53fad527dbc20445753858"
+    }
+  ],
+  "screenshot_context": "Captured with Puppeteer from the real local production preview during attempt 3. Functional attempt 4 separated expensive capture from timed actions and passed. Images are genuine captures, not reviewed art approvals.",
+  "scope_limits": [
+    "No CSS, materials, camera, models or sight constants were redesigned.",
+    "Image-review tool returned Gemini 429 quota exhaustion; honest visual comparison remains pending, no score is claimed.",
+    "The four-player deterministic simulation proves start, movement, purge, body sight eviction, body reporting, two UI votes and resumption, not a ten-minute round or normal-GPU performance.",
+    "Inco private-role reach expansion remains gated on a verified mechanism; no client-declared role or radius is trusted.",
+    "The native lobby replaced bots but left human seats 0,4,5,6 in the real smoke. Contract enrollment is dense by sorted wallet order, while Jump encryption and ejection use raw server seats. This source-confirmed existing Inco mapping gate is outside this focused sight seam; no live-chain reproduction is claimed.",
+    "No push, deployment, external post, schedule edit or access to the old/live Parasite tree occurred."
+  ],
+  "next": "Verify/fix dense human seat mapping for Inco, then finish bot role enrollment and Jump (bots are currently excluded from Parasite assignment) and the ten-minute-round gate. Visual fog/UI polish and review remain pending."
+}

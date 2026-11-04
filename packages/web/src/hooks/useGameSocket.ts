@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type {
   RoomState,
+  PositionsPayload,
   Seat,
   SkinId,
   TaskId,
@@ -13,6 +14,7 @@ import type {
   ChatMessage,
 } from '@parasite/shared';
 import { SERVER_URL } from '@/lib/contract';
+import { replacePositions, replaceSnapshot } from '../game/bridge';
 
 export interface Toast {
   id: number;
@@ -43,7 +45,7 @@ export interface UseGameSocket {
   positions: Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>;
   join: (opts: { code: string; name: string; skin: SkinId; address: string | null }) => Promise<void>;
   startGame: () => Promise<void>;
-  sendInput: (ax: number, ay: number) => void;
+  sendInput: (ax: number, ay: number, fx?: number, fy?: number) => void;
   completeTask: (taskId: TaskId) => Promise<void>;
   callMeeting: () => Promise<void>;
   reportBody: (victimSeat: Seat) => Promise<void>;
@@ -58,9 +60,8 @@ export interface UseGameSocket {
 /**
  * Owns the Socket.io connection and mirrors the server's authoritative state.
  *
- * Positions arrive on a separate high-frequency channel from full snapshots, so
- * they are kept in a ref-backed Map that Phaser reads every frame without
- * forcing a React re-render 20 times a second.
+ * Positions stay in a ref-backed Map that ThreeScene reads every frame.
+ * Body sight updates also refresh React's proximity controls.
  */
 export function useGameSocket(): UseGameSocket {
   const socketRef = useRef<Socket | null>(null);
@@ -95,17 +96,18 @@ export function useGameSocket(): UseGameSocket {
     socketRef.current = socket;
 
     socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
+    socket.on('disconnect', () => {
+      positions.current.clear();
+      setState(null);
+      setConnected(false);
+    });
     socket.on('connect_error', () => setConnected(false));
 
     socket.on('you', (p: { id: string; seat: Seat }) => setMySeat(p.seat));
 
     socket.on('state', (s: RoomState) => {
       setState(s);
-      // Reconcile the fast channel with the authoritative snapshot.
-      for (const p of s.players) {
-        positions.current.set(p.seat, { x: p.x, y: p.y, dir: p.dir, moving: p.moving });
-      }
+      replaceSnapshot(positions.current, s);
       if (s.end) setEnd(s.end);
       if (s.phase === 'lobby') {
         setEnd(null);
@@ -117,10 +119,10 @@ export function useGameSocket(): UseGameSocket {
 
     socket.on(
       'positions',
-      (payload: { t: number; p: { s: Seat; x: number; y: number; d: -1 | 1; m: boolean }[] }) => {
-        for (const e of payload.p) {
-          positions.current.set(e.s, { x: e.x, y: e.y, dir: e.d, moving: e.m });
-        }
+      (payload: PositionsPayload) => {
+        replacePositions(positions.current, payload);
+        // Bodies and proximity controls must refresh on movement/turns, not only game events.
+        setState((s) => s ? { ...s, bodies: payload.b } : s);
       }
     );
 
@@ -168,7 +170,10 @@ export function useGameSocket(): UseGameSocket {
         throw new Error(res.error ?? 'join failed');
       }
       if (res.you) setMySeat(res.you.seat);
-      if (res.state) setState(res.state);
+      if (res.state) {
+        replaceSnapshot(positions.current, res.state);
+        setState(res.state);
+      }
     },
     [emitAck, pushToast]
   );
@@ -200,7 +205,7 @@ export function useGameSocket(): UseGameSocket {
     positions: positions.current,
     join,
     startGame: () => simpleAction('startGame'),
-    sendInput: (ax, ay) => socketRef.current?.emit('input', { ax, ay, seq: Date.now() } as never),
+    sendInput: (ax, ay, fx, fy) => socketRef.current?.emit('input', { ax, ay, fx, fy, seq: Date.now() } as never),
     completeTask: (taskId) => simpleAction('completeTask', { taskId }),
     callMeeting: () => simpleAction('callMeeting'),
     reportBody: (victimSeat) => simpleAction('reportBody', { victimSeat }),
