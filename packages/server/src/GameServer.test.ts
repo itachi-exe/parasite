@@ -68,6 +68,37 @@ describe('GameServer (socket integration)', () => {
     return ack;
   }
 
+  it('refreshes each client identity when lobby bots step aside', async () => {
+    const ROOM = 'DENSEIDENTITY';
+    const joined: Socket[] = [];
+    const ownSeats = new Map<Socket, number>();
+    for (let i = 0; i < MIN_PLAYERS - 1; i++) {
+      const s = connect();
+      s.on('you', (p) => ownSeats.set(s, p.seat));
+      expect((await join(s, `P${i}`, ROOM)).ok).toBe(true);
+      joined.push(s);
+    }
+    const updates = joined.map((s) => new Promise<any>((resolve) => {
+      const onState = (state: any) => {
+        if (state.players.some((p: any) => p.isBot)) return;
+        s.off('state', onState);
+        resolve(state);
+      };
+      s.on('state', onState);
+    }));
+    const last = connect();
+    last.on('you', (p) => ownSeats.set(last, p.seat));
+    const ack = await join(last, 'P3', ROOM);
+    expect(ack.ok).toBe(true);
+    joined.push(last);
+    const states = [...await Promise.all(updates), ack.state];
+    for (const [i, s] of joined.entries()) {
+      expect(states[i].players.find((p: any) => p.id === s.id)?.seat).toBe(i);
+      expect(ownSeats.get(s)).toBe(i);
+      s.disconnect();
+    }
+  });
+
   it('enforces the player cap and lobby-only joining over the wire', async () => {
     const ROOM = 'CAPTEST';
     const joined: Socket[] = [];

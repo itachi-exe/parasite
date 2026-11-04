@@ -410,6 +410,7 @@ export class GameServer {
     if (!this.rooms.has(room.code)) return;
     for (const p of room.players.values()) {
       if (!p.isBot && p.connected && this.socketRoom.get(p.id) === room.code) {
+        if (room.phase === 'lobby') this.io.to(p.id).emit('you', { id: p.id, seat: p.seat });
         this.io.to(p.id).emit('state', room.stateFor(p.id));
       }
     }

@@ -1,0 +1,145 @@
+{
+  "scope": "Server-only dense lobby seats, recipient identity refresh, human host transfer and wallet-indexed start validation; no visual implementation changes.",
+  "working_tree_base": "a2a4528a11eed238f2ac939151376d124735e62f",
+  "observed_parent_route": {
+    "model": "gpt-6.1-sol",
+    "provider": "custom:agentrouter"
+  },
+  "specialist": "Quota fallback ended the helper before edits; no successful specialist completion claimed and no blocked route retried.",
+  "workspace_tests": {
+    "counts": {
+      "@parasite/shared": 29,
+      "@parasite/server": 77,
+      "@parasite/contracts": 45,
+      "@parasite/web": 4
+    },
+    "total_passed": 155,
+    "command": "NODE_OPTIONS=--max-old-space-size=1024 npm test",
+    "exit_code": 0
+  },
+  "observed_red_green_regressions": {
+    "seat-indices": 1,
+    "bot-roster": 1,
+    "client-identity": 1,
+    "invalid-wallet": 4,
+    "duplicate-wallet": 1,
+    "human-host": 1
+  },
+  "root_typecheck": {
+    "passed": true,
+    "command": "NODE_OPTIONS=--max-old-space-size=1024 npm run typecheck",
+    "exit_code": 0
+  },
+  "production_build": {
+    "passed": true,
+    "heap_cap_mb": 1024,
+    "circle_node_total": 2,
+    "local_server_url": "http://127.0.0.1:9201",
+    "public_game_contract_override": "empty; simulated only",
+    "exit_code": 0
+  },
+  "property_selfcheck": {
+    "checked_lobby_transitions": 400,
+    "dense_after_bot_replacement_and_disconnect": true,
+    "human_host_after_disconnect": true,
+    "in_game_roster_frozen_after_death_and_disconnect": true,
+    "scope": "Actual local GameRoom execution; no RPC, signing, FHE result or live-network claim."
+  },
+  "local_ui_smoke": {
+    "fixture": "Four real local sockets, one rendered UI (Mara), deterministic simulated Parasite (Rhee); tests reseating, identity, movement, purge, body report and votes. Not a ten-minute-round or Inco proof.",
+    "screenshots": [
+      "/opt/hermes/projects/parasite-v2/shots/v2/site/seat-mapping/lobby-dense.png"
+    ],
+    "pageErrors": [],
+    "identities": {
+      "Wren": 0,
+      "Mara": 1,
+      "Rhee": 2,
+      "Kenji": 3
+    },
+    "capture_memory_mb": {
+      "lobby-dense": 1511,
+      "living-down": 1125,
+      "living-up": 1182,
+      "body-report-meeting": 1150
+    },
+    "seats": {
+      "Wren": 0,
+      "Mara": 1,
+      "Rhee": 2,
+      "Kenji": 3
+    },
+    "skippedScreenshots": [
+      "living-down: 1125 MB available, below 1500 MB.",
+      "living-up: 1182 MB available, below 1500 MB.",
+      "body-report-meeting: 1150 MB available, below 1500 MB."
+    ],
+    "result": {
+      "started": true,
+      "realMovement": true,
+      "hiddenSnapshot": true,
+      "bodyTurnEviction": true,
+      "hiddenPlateEviction": true,
+      "bodyReportedFromUI": true,
+      "uiVote": true,
+      "twoSocketVotes": true,
+      "denseRoster": true,
+      "refreshedUiIdentity": true,
+      "resumed": true,
+      "positionPackets": 1109
+    }
+  },
+  "wrapper_cleanup_note": {
+    "initial_exit_code": 1,
+    "initial_error": "Plain post-shutdown bind raised EADDRINUSE after the Node UI assertions passed. Later listener and process readbacks were clear.",
+    "repair": "SO_REUSEADDR added to both checks; a real TCP self-check reproduced the TIME_WAIT false-positive and confirmed active listeners are still rejected.",
+    "actual_patched_check_blocks_passed": 2,
+    "full_wrapper_rerun_after_repair": false
+  },
+  "resource_cleanup": {
+    "task_listeners_remaining": 0,
+    "task_processes_remaining": 0,
+    "task_browser_profile_removed": true,
+    "unrelated_browsers_and_services": "left untouched"
+  },
+  "review": {
+    "mode": "One-shot focused self-review, static scan, baseline-aware regressions and real execution. Independent reviewer skipped under requesting-code-review one-shot policy.",
+    "static_security_matches": {
+      "hardcoded_secrets": 0,
+      "shell_injection": 0,
+      "dynamic_code": 0,
+      "unsafe_deserialization": 0,
+      "formatted_sql": 0
+    },
+    "art_approval": false,
+    "image_review_blocker": "Auxiliary Gemini 3.5 Flash has a recorded 429 quota block; no re-probe or model-policy bypass."
+  },
+  "screenshot_file": {
+    "path": "/opt/hermes/projects/parasite-v2/shots/v2/site/seat-mapping/lobby-dense.png",
+    "width": 1280,
+    "height": 720,
+    "bytes": 590657,
+    "sha256": "e3494081463f9b7f7fd511e2435da63ee570d7994e1a04385cc9a75a939f5e71"
+  },
+  "source_sha256": {
+    "packages/server/src/GameRoom.ts": "37cda11ae65520c75f35b03946a7d735a0c7201ecdbb5dfe936cca3d3df819e6",
+    "packages/server/src/GameServer.ts": "b5481da452c6501f7b5cae178884a55245d112d9f3eb2d1c6a72c76c3ee71753",
+    "packages/server/src/GameRoom.test.ts": "f86822868097f61006b7c2ab8159f3200c17f6ef6228912c66a0204369abd254",
+    "packages/server/src/GameServer.test.ts": "54c77cfa140b5ceeddaa8155fffb30d83550a9d83dced28b437aff90e8811797"
+  },
+  "raw_logs_scratch": "/opt/hermes/.hermes/cache/scratch/parasite-seat-mapping-20261104/",
+  "open_gates": [
+    "bot role enrollment and Jump",
+    "one-human ten-minute round",
+    "live Inco role/Jump/vote/ejection proof",
+    "visual fog and whole-site UI review",
+    "normal-GPU performance",
+    "30-45 second clip plus 15 second cut and final written deliverables"
+  ],
+  "boundaries": {
+    "push": false,
+    "live_site_or_ashe_tree_access": false,
+    "cron_changes": false,
+    "preexisting_untracked_shots": "preserved"
+  }
+}

@@ -44,7 +44,7 @@ function fill(room: GameRoom, n: number): string[] {
   const ids: string[] = [];
   for (let i = 0; i < n; i++) {
     const id = `p${i}`;
-    const { result } = room.join(id, `P${i}`, 0, `0xaddr${i}`);
+    const { result } = room.join(id, `P${i}`, 0, `0x${(i + 1).toString(16).padStart(40, '0')}`);
     if (result.ok) ids.push(id);
   }
   return ids;
@@ -135,6 +135,65 @@ describe('GameRoom — lobby constraints (spec: enforced server-side)', () => {
     room.disconnect('p2');
     const seats = [...room.players.values()].map((p) => p.seat).sort((a, b) => a - b);
     expect(seats).toEqual([0, 1, 2, 3]);
+  });
+
+  it('keeps human seats equal to contract roster indices as bots step aside', () => {
+    const room = makeRoom({ simulated: false });
+    for (let i = 0; i < MIN_PLAYERS; i++) {
+      const address = `0x${(i + 1).toString(16).padStart(40, '0')}`;
+      expect(room.join(`p${i}`, `P${i}`, 0, address).result.ok).toBe(true);
+      room.syncBots();
+    }
+    const roster = [...room.players.values()]
+      .filter((p) => !p.isBot)
+      .sort((a, b) => a.seat - b.seat);
+    expect(roster.map((p) => p.seat)).toEqual([0, 1, 2, 3]);
+    expect(room.botSeats()).toHaveLength(0);
+  });
+
+  it('rejects an Inco start while bots occupy contract seats', async () => {
+    const room = makeRoom({ simulated: false });
+    room.join('p0', 'P0', 0, '0x0000000000000000000000000000000000000001');
+    room.syncBots();
+    const res = await room.startGame('p0');
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/real players/i);
+    expect(room.phase).toBe('lobby');
+  });
+
+  it.each([null, '0xaddr3', `0x${'0'.repeat(40)}`, 7])(
+    'rejects an Inco start with an invalid wallet (%s)',
+    async (address) => {
+      const room = makeRoom({ simulated: false });
+      fill(room, MIN_PLAYERS - 1);
+      room.join('p3', 'P3', 0, address as string | null);
+      const res = await room.startGame('p0');
+      expect(res.ok).toBe(false);
+      expect(res.error).toMatch(/valid wallet/i);
+      expect(room.phase).toBe('lobby');
+    }
+  );
+
+  it('rejects duplicate Inco wallets regardless of address case', async () => {
+    const room = makeRoom({ simulated: false });
+    fill(room, MIN_PLAYERS);
+    room.players.get('p0')!.address = `0x${'aB'.repeat(20)}`;
+    room.players.get('p3')!.address = `0x${'Ab'.repeat(20)}`;
+    const res = await room.startGame('p0');
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/different wallet/i);
+    expect(room.phase).toBe('lobby');
+  });
+
+  it('passes lobby ownership to a human instead of a filler bot', () => {
+    const room = makeRoom();
+    for (let i = 0; i < 2; i++) {
+      room.join(`p${i}`, `P${i}`, 0);
+      room.syncBots();
+    }
+    room.disconnect('p0');
+    room.syncBots();
+    expect(room.hostId).toBe('p1');
   });
 
   it('reassigns the lobby host if the host leaves', () => {

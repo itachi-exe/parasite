@@ -250,7 +250,7 @@ export class GameRoom {
       this.players.delete(id);
       this.reseat();
       if (this.hostId === id) {
-        this.hostId = this.players.keys().next().value ?? null;
+        this.hostId = [...this.players.values()].find((p) => !p.isBot)?.id ?? null;
       }
       return;
     }
@@ -289,6 +289,18 @@ export class GameRoom {
     }
     if (this.players.size > MAX_PLAYERS) {
       return fail(`Too many players (max ${MAX_PLAYERS}).`);
+    }
+    if (this.roleMode === 'inco') {
+      const wallets = new Set<string>();
+      for (const p of this.players.values()) {
+        if (p.isBot) return fail(`Need at least ${MIN_PLAYERS} real players for Inco.`);
+        if (typeof p.address !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(p.address) || /^0x0{40}$/.test(p.address)) {
+          return fail('Every player needs a valid wallet for Inco.');
+        }
+        const wallet = p.address.toLowerCase();
+        if (wallets.has(wallet)) return fail('Each player needs a different wallet for Inco.');
+        wallets.add(wallet);
+      }
     }
     return OK;
   }
@@ -383,6 +395,7 @@ export class GameRoom {
       this.addBot();
       changed = true;
     }
+    if (changed) this.reseat();
     return changed;
   }
 
