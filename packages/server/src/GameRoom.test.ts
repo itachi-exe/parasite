@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { GameRoom } from './GameRoom.js';
 import {
   LocalRoleOracle,
@@ -28,14 +28,14 @@ function makeClock(start = 1_000_000) {
   };
 }
 
-function makeRoom(opts?: { simulated?: boolean; clock?: ReturnType<typeof makeClock> }) {
+function makeRoom(opts?: { simulated?: boolean; clock?: ReturnType<typeof makeClock>; rng?: () => number }) {
   const clock = opts?.clock ?? makeClock();
   const simulated = opts?.simulated ?? true;
   return new GameRoom({
     code: 'TEST',
     roleMode: simulated ? 'simulated' : 'inco',
     contractAddress: simulated ? null : '0xcontract',
-    localOracle: simulated ? new LocalRoleOracle(() => 0) : undefined,
+    localOracle: simulated ? new LocalRoleOracle(opts?.rng ?? (() => 0)) : undefined,
     now: clock.now,
   });
 }
@@ -795,7 +795,288 @@ describe('GameRoom — role mode is never hidden', () => {
   });
 });
 
+describe('GameRoom: simulated role settlement', () => {
+  it.each(['ejection', 'game end'] as const)(
+    'simulated role settlement waits for an admitted transfer before %s reveal', async (boundary) => {
+      const clock = makeClock();
+      const oracle = new LocalRoleOracle(() => 0);
+      const room = new GameRoom({ code: 'BOTREVEALRACE', roleMode: 'simulated', contractAddress: null, localOracle: oracle, now: clock.now });
+      fill(room, 1);
+      room.syncBots();
+      await room.startGame('p0');
+      const source = room.bySeat(0)!;
+      const target = room.bySeat(1)!;
+      Object.assign(source, { x: 810, y: 600 });
+      Object.assign(target, { x: 800, y: 600 });
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const realJump = oracle.jump.bind(oracle);
+      const spy = vi.spyOn(oracle, 'jump').mockImplementationOnce(async (params) => { await gate; await realJump(params); });
+      const rng = vi.spyOn(Math, 'random').mockReturnValue(0.9);
+      const transfer = room.jumpAnnounce(source.id, target.seat);
+      let reveal: Promise<unknown> | undefined;
+      try {
+        if (boundary === 'ejection') {
+          expect(room.callMeeting(source.id).result.ok).toBe(true);
+          clock.advance(MEETING_DISCUSSION_MS + 1);
+          room.tick();
+          for (const p of room.players.values()) expect(room.castVote(p.id, target.seat).ok).toBe(true);
+          room.tick();
+          expect(room.meeting?.result?.ejectedSeat).toBe(target.seat);
+          reveal = room.resolveEjectionLocally();
+        } else {
+          room.endGame('crew', 'crew-tasks');
+          reveal = room.resolveFinalRevealLocally();
+        }
+        let revealed = false;
+        void reveal.then(() => { revealed = true; });
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(revealed).toBe(false);
+        clock.advance(MEETING_RESULT_MS + 1);
+        room.tick();
+        if (boundary === 'ejection') {
+          expect(room.phase).toBe('meeting');
+          expect(room.meeting?.result?.ejectedWasParasite).toBeNull();
+        } else expect(room.end?.revealedParasiteSeat).toBeNull();
+        release();
+        expect(await transfer).toEqual({ ok: true });
+        await reveal;
+        if (boundary === 'ejection') {
+          expect(room.meeting?.result?.ejectedWasParasite).toBe(true);
+          room.tick();
+          expect(room.end?.reason).toBe('crew-ejected-parasite');
+          await room.resolveFinalRevealLocally();
+        }
+        expect(room.end?.revealedParasiteSeat).toBe(target.seat);
+        expect(await room.readRoleForSeat(target.seat)).toBe(true);
+        expect((await room.jumpAnnounce(source.id, target.seat)).ok).toBe(false);
+        expect(spy).toHaveBeenCalledTimes(1);
+      } finally {
+        release();
+        await transfer;
+        await reveal;
+        spy.mockRestore();
+        rng.mockRestore();
+      }
+    }
+  );
+});
+
 describe('GameRoom: bot behaviour', () => {
+  it('a starting Parasite bot never submits a crew task on its first tick', async () => {
+    const room = makeRoom({ rng: () => 0.3 });
+    fill(room, 1);
+    room.syncBots();
+    await room.startGame('p0');
+    const bot = room.bySeat(1)!;
+    expect(await room.readRoleForSeat(bot.seat)).toBe(true);
+    const taskId = 'upload-research-data';
+    Object.assign(bot, TASK_STATIONS[taskId]);
+    Object.assign(bot.bot!, { taskId, target: { ...TASK_STATIONS[taskId] }, actAt: 0 });
+    room.tick();
+    expect(bot.tasksDone).toBe(0);
+    expect(bot.bot!.taskId).toBeNull();
+  });
+
+  it('human transfers update bot intent immediately and a former bot host reports as crew', async () => {
+    const clock = makeClock();
+    const room = makeRoom({ clock });
+    fill(room, 1);
+    room.syncBots();
+    await room.startGame('p0');
+    const human = room.bySeat(0)!;
+    const bot = room.bySeat(1)!;
+    const victim = room.bySeat(2)!;
+    const other = room.bySeat(3)!;
+    Object.assign(human, { x: 810, y: 600 });
+    Object.assign(bot, { x: 800, y: 600 });
+    Object.assign(other, { x: 290, y: 250 });
+    Object.assign(bot.bot!, {
+      taskId: 'upload-research-data', target: { x: 800, y: 600 }, actAt: clock.now() + 60_000,
+    });
+    expect(await room.jumpAnnounce(human.id, bot.seat)).toEqual({ ok: true });
+    expect(await room.readRoleForSeat(0)).toBe(false);
+    expect(await room.readRoleForSeat(1)).toBe(true);
+    expect(bot.bot!.taskId).toBeNull();
+    expect(bot.bot!.actAt).toBe(0);
+    victim.alive = false;
+    room.bodies = [{ seat: victim.seat, x: bot.x, y: bot.y }];
+    const rng = vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    try {
+      room.tick();
+      expect(bot.tasksDone).toBe(0);
+      expect(room.phase).toBe('playing');
+      expect(await room.jumpAnnounce(bot.id, human.seat)).toEqual({ ok: true });
+      expect(await room.readRoleForSeat(1)).toBe(false);
+      expect(await room.readRoleForSeat(0)).toBe(true);
+      room.tick();
+      expect(room.meeting?.reason).toEqual({ kind: 'body', reporterSeat: bot.seat, victimSeat: victim.seat });
+    } finally {
+      rng.mockRestore();
+    }
+  });
+
+  it('serializes human and bot transfers while bot intent is awaiting the oracle', async () => {
+    const clock = makeClock();
+    const oracle = new LocalRoleOracle(() => 0);
+    const room = new GameRoom({ code: 'BOTRACE', roleMode: 'simulated', contractAddress: null, localOracle: oracle, now: clock.now });
+    fill(room, 1);
+    room.syncBots();
+    await room.startGame('p0');
+    const bot = room.bySeat(1)!;
+    const decoy = room.bySeat(2)!;
+    Object.assign(room.bySeat(0)!, { x: 810, y: 600 });
+    Object.assign(bot, { x: 800, y: 600 });
+    Object.assign(decoy, { x: 830, y: 600 });
+    Object.assign(bot.bot!, { taskId: 'upload-research-data', target: { x: 800, y: 600 }, actAt: 0 });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const realJump = oracle.jump.bind(oracle);
+    const spy = vi.spyOn(oracle, 'jump').mockImplementationOnce(async (params) => { await gate; await realJump(params); });
+    const transfer = room.jumpAnnounce('p0', bot.seat);
+    try {
+      const competing = await room.jumpAnnounce(decoy.id, bot.seat);
+      expect(competing.ok).toBe(false);
+      expect(competing.error).toMatch(/resolving/i);
+      room.tick();
+      expect(bot.tasksDone).toBe(0);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+      await transfer;
+      spy.mockRestore();
+    }
+    expect(await room.readRoleForSeat(bot.seat)).toBe(true);
+    expect(bot.bot!.taskId).toBeNull();
+  });
+
+  it('returns a same-shaped failure on oracle errors and releases the transfer lock', async () => {
+    const clock = makeClock();
+    const oracle = new LocalRoleOracle(() => 0.3);
+    const room = new GameRoom({ code: 'BOTERROR', roleMode: 'simulated', contractAddress: null, localOracle: oracle, now: clock.now });
+    fill(room, 1);
+    room.syncBots();
+    await room.startGame('p0');
+    Object.assign(room.bySeat(0)!, { x: 830, y: 600 });
+    const bot = room.bySeat(1)!;
+    Object.assign(bot, { x: 800, y: 600 });
+    const spy = vi.spyOn(oracle, 'jump').mockRejectedValueOnce(new Error('unavailable'));
+    try {
+      await expect(room.jumpAnnounce(bot.id, 0)).resolves.toEqual({ ok: false, error: 'Jump could not be resolved. Try again.' });
+      expect(await room.readRoleForSeat(bot.seat)).toBe(true);
+      clock.advance(20_000);
+      expect(await room.jumpAnnounce(bot.id, 0)).toEqual({ ok: true });
+      expect(await room.readRoleForSeat(0)).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('freezes bot intent if a transferred private role cannot be refreshed', async () => {
+    const clock = makeClock();
+    const oracle = new LocalRoleOracle(() => 0);
+    const room = new GameRoom({ code: 'BOTREADERROR', roleMode: 'simulated', contractAddress: null, localOracle: oracle, now: clock.now });
+    fill(room, 1);
+    room.syncBots();
+    await room.startGame('p0');
+    Object.assign(room.bySeat(0)!, { x: 810, y: 600 });
+    const bot = room.bySeat(1)!;
+    Object.assign(bot, { x: 800, y: 600 });
+    Object.assign(bot.bot!, { taskId: 'upload-research-data', target: { x: 800, y: 600 }, actAt: 0 });
+    const spy = vi.spyOn(oracle, 'readMyRole').mockRejectedValueOnce(new Error('unavailable'));
+    try {
+      expect((await room.jumpAnnounce('p0', bot.seat)).ok).toBe(true);
+      expect((await oracle.readMyRole({ gameId: room.chainGameId!, mySeat: bot.seat })).isParasite).toBe(true);
+      room.tick();
+      expect(bot.tasksDone).toBe(0);
+      expect(bot.ax).toBe(0);
+      clock.advance(1001);
+      expect(room.tick()).toContainEqual({ type: 'rolesUpdated' });
+      expect(bot.tasksDone).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('an ordinary bot-to-bot Jump stays single-flight through a meeting and reveals the new bot seat', async () => {
+    const clock = makeClock();
+    const oracle = new LocalRoleOracle(() => 0.3);
+    const room = new GameRoom({ code: 'BOTCHAIN', roleMode: 'simulated', contractAddress: null, localOracle: oracle, now: clock.now });
+    fill(room, 1);
+    room.syncBots();
+    await room.startGame('p0');
+    for (const p of room.players.values()) Object.assign(p, { x: 290, y: 250 });
+    const source = room.bySeat(1)!;
+    const target = room.bySeat(2)!;
+    Object.assign(source, { x: 800, y: 600 });
+    Object.assign(target, { x: 835, y: 600 });
+    Object.assign(target.bot!, { taskId: 'upload-research-data', target: { x: 800, y: 600 }, actAt: 0 });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const realJump = oracle.jump.bind(oracle);
+    const spy = vi.spyOn(oracle, 'jump').mockImplementationOnce(async (params) => { await gate; await realJump(params); });
+    const rng = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      room.tick();
+      for (let i = 0; i < 10; i++) { clock.advance(50); room.tick(); }
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(target.tasksDone).toBe(0);
+      expect(room.callMeeting('p0').result.ok).toBe(true);
+      release();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(await room.readRoleForSeat(source.seat)).toBe(false);
+      expect(await room.readRoleForSeat(target.seat)).toBe(true);
+      expect(target.bot!.taskId).toBeNull();
+      room.tick();
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect((await room.jumpAnnounce(target.id, source.seat)).ok).toBe(false);
+      clock.advance(MEETING_DISCUSSION_MS + 1);
+      room.tick();
+      for (const p of room.players.values()) expect(room.castVote(p.id, target.seat).ok).toBe(true);
+      room.tick();
+      await room.resolveEjectionLocally();
+      expect(room.meeting?.result?.ejectedWasParasite).toBe(true);
+      clock.advance(MEETING_RESULT_MS + 1);
+      room.tick();
+      await room.resolveFinalRevealLocally();
+      expect(room.end).toEqual({ winner: 'crew', reason: 'crew-ejected-parasite', revealedParasiteSeat: target.seat });
+      room.tick();
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      spy.mockRestore();
+      rng.mockRestore();
+    }
+  });
+
+  it.each(['out of range', 'dead target', 'dead host', 'cooldown', 'assigning', 'meeting', 'ended'] as const)(
+    'bot Jump respects %s without changing the oracle host', async (rule) => {
+      const clock = makeClock();
+      const room = makeRoom({ clock, rng: () => 0.3 });
+      fill(room, 1);
+      room.syncBots();
+      await room.startGame('p0');
+      for (const p of room.players.values()) Object.assign(p, { x: 290, y: 250 });
+      const bot = room.bySeat(1)!;
+      const target = room.bySeat(0)!;
+      Object.assign(bot, { x: 800, y: 600, lastPurgeAt: clock.now() });
+      Object.assign(target, { x: 830, y: 600 });
+      if (rule === 'out of range') target.x = bot.x + JUMP_RANGE + 1;
+      else if (rule === 'dead target') target.alive = false;
+      else if (rule === 'dead host') bot.alive = false;
+      else if (rule === 'cooldown') bot.lastJumpAt = clock.now();
+      else room.phase = rule;
+      const rng = vi.spyOn(Math, 'random').mockReturnValue(0);
+      try {
+        room.tick();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(await room.readRoleForSeat(bot.seat)).toBe(true);
+        expect(await room.readRoleForSeat(target.seat)).toBe(false);
+      } finally { rng.mockRestore(); }
+    }
+  );
+
   it('a crew bot standing at a body reports it', async () => {
     const room = makeRoom();
     fill(room, 1);

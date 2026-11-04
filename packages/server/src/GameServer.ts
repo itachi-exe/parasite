@@ -122,16 +122,18 @@ export class GameServer {
         const room = this.roomOf(socket);
         if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
         const res = await room.startGame(socket.id);
-        if (!res.ok) return ack?.(res);
+        if (!res.ok) {
+          this.cleanup(room);
+          this.broadcastState(room);
+          return ack?.(res);
+        }
 
         ack?.({ ok: true });
         this.io.to(room.code).emit('gameStarted', {
           chainGameId: room.chainGameId,
-          // Humans only, matching the seat list the room hands its oracle:
-          // a bot has no wallet and can never decrypt a role, so it must not
-          // be a candidate on-chain either.
+          // Inco canStart already requires every seat to be a wallet-owning human.
           seats: [...room.players.values()]
-            .filter((p) => !p.isBot)
+            .sort((a, b) => a.seat - b.seat)
             .map((p) => ({ seat: p.seat, address: p.address })),
         });
         this.broadcastState(room);
@@ -399,8 +401,10 @@ export class GameServer {
    */
   private async deliverSimulatedRoles(room: GameRoom): Promise<void> {
     if (room.roleMode !== 'simulated') return;
+    await room.recoverSimulatedRoles();
     for (const player of room.players.values()) {
-      const isParasite = await room.readRoleForSeat(player.seat);
+      if (player.isBot || !player.connected || this.socketRoom.get(player.id) !== room.code) continue;
+      const isParasite = room.simulatedRoleForSeat(player.seat);
       if (isParasite === null) continue;
       this.io.to(player.id).emit('simulatedRole', { isParasite });
     }
@@ -420,6 +424,9 @@ export class GameServer {
   private async flush(room: GameRoom, emits: Emit[]): Promise<void> {
     for (const e of emits) {
       switch (e.type) {
+        case 'rolesUpdated':
+          await this.deliverSimulatedRoles(room);
+          break;
         case 'state':
           this.broadcastState(room);
           break;

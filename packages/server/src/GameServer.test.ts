@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { io as ioc, type Socket } from 'socket.io-client';
@@ -10,6 +10,7 @@ import {
   TASK_STATIONS,
   TASK_INTERACT_RADIUS,
   JUMP_RANGE,
+  LocalRoleOracle,
 } from '@parasite/shared';
 
 /**
@@ -96,6 +97,137 @@ describe('GameServer (socket integration)', () => {
       expect(states[i].players.find((p: any) => p.id === s.id)?.seat).toBe(i);
       expect(ownSeats.get(s)).toBe(i);
       s.disconnect();
+    }
+  });
+
+  it.each(['assignment', 'private read'] as const)(
+    'simulated role settlement returns a retryable start ack after %s failure', async (failure) => {
+      const code = failure === 'assignment' ? 'BOTSTARTFAIL' : 'BOTSTARTREADFAIL';
+      const rng = vi.spyOn(Math, 'random').mockReturnValue(0.3);
+      const human = connect();
+      const started: any[] = [];
+      const roles: any[] = [];
+      human.on('gameStarted', (p) => started.push(p));
+      human.on('simulatedRole', (p) => roles.push(p));
+      const spy = failure === 'assignment'
+        ? vi.spyOn(LocalRoleOracle.prototype, 'startGame').mockRejectedValueOnce(new Error('assignment unavailable'))
+        : vi.spyOn(LocalRoleOracle.prototype, 'readMyRole').mockRejectedValueOnce(new Error('private read unavailable'));
+      try {
+        expect((await join(human, 'Solo', code)).ok).toBe(true);
+        const room = game.roomFor(code)!;
+        const attempt = human.timeout(800).emitWithAck('startGame');
+        await expect(attempt).resolves.toEqual({ ok: false, error: expect.any(String) });
+        expect(room.phase).toBe('lobby');
+        expect(room.chainGameId).toBeNull();
+        expect(started).toEqual([]);
+        expect(roles).toEqual([]);
+        room.tick();
+        expect([...room.players.values()].every((p) => p.tasksDone === 0)).toBe(true);
+        const role = once<any>(human, 'simulatedRole');
+        expect(await human.timeout(800).emitWithAck('startGame')).toEqual({ ok: true });
+        expect(await role).toEqual({ isParasite: false });
+        expect(room.phase).toBe('playing');
+        expect(await room.readRoleForSeat(1)).toBe(true);
+      } finally {
+        human.disconnect();
+        spy.mockRestore();
+        rng.mockRestore();
+      }
+    }
+  );
+
+  it('simulated role settlement retries accepted Jump reads without replaying the transfer', async () => {
+    const code = 'BOTSETTLEMENTRETRY';
+    const rng = vi.spyOn(Math, 'random').mockReturnValue(0);
+    const human = connect();
+    const observer = connect();
+    const outsider = connect();
+    const roles: boolean[] = [];
+    const observerRoles: boolean[] = [];
+    const outsiderEvents: string[] = [];
+    const publicEvents: [string, any][] = [];
+    human.on('simulatedRole', (p) => roles.push(p.isParasite));
+    human.onAny((ev, p) => publicEvents.push([ev, p]));
+    observer.on('simulatedRole', (p) => observerRoles.push(p.isParasite));
+    observer.onAny((ev, p) => publicEvents.push([ev, p]));
+    outsider.onAny((ev) => outsiderEvents.push(ev));
+    let readSpy: ReturnType<typeof vi.spyOn> | undefined;
+    let jumpSpy: ReturnType<typeof vi.spyOn> | undefined;
+    try {
+      await join(human, 'Source', code);
+      await join(observer, 'Observer', code);
+      expect(await human.timeout(800).emitWithAck('startGame')).toEqual({ ok: true });
+      rng.mockReturnValue(0.9);
+      await expect.poll(() => roles.length).toBe(1);
+      await expect.poll(() => observerRoles.length).toBe(1);
+      expect(roles).toEqual([true]);
+      const room = game.roomFor(code)!;
+      const target = room.bySeat(1)!;
+      const crew = room.bySeat(2)!;
+      Object.assign(room.players.get(human.id!)!, { x: 810, y: 600 });
+      for (const bot of [target, crew]) {
+        Object.assign(bot, TASK_STATIONS['upload-research-data']);
+        Object.assign(bot.bot!, { taskId: 'upload-research-data', target: { ...TASK_STATIONS['upload-research-data'] }, actAt: Date.now() + 60_000 });
+      }
+      roles.length = 0;
+      observerRoles.length = 0;
+      publicEvents.length = 0;
+      const oracle = (room as unknown as { localOracle: LocalRoleOracle }).localOracle;
+      readSpy = vi.spyOn(oracle, 'readMyRole')
+        .mockRejectedValueOnce(new Error('private read unavailable'))
+        .mockRejectedValueOnce(new Error('private read still unavailable'));
+      jumpSpy = vi.spyOn(oracle, 'jump');
+      expect(await human.timeout(800).emitWithAck('jumpAnnounce', { targetSeat: target.seat })).toEqual({ ok: true });
+      crew.bot!.actAt = 0;
+      expect(await observer.timeout(800).emitWithAck('leaveLobby')).toEqual({ ok: true });
+      await once<any>(human, 'positions');
+      expect(target.tasksDone).toBe(0);
+      expect(crew.tasksDone).toBe(0);
+      expect(target.ax).toBe(0);
+      expect(roles).toEqual([]);
+      expect((await human.timeout(800).emitWithAck('purge', { targetSeat: target.seat })).ok).toBe(false);
+      expect(target.alive).toBe(true);
+      await expect.poll(() => roles, { timeout: 3_000 }).toEqual([false]);
+      expect(observerRoles).toEqual([]);
+      await expect.poll(() => crew.tasksDone).toBe(1);
+      expect(target.tasksDone).toBe(0);
+      expect(target.bot!.taskId).toBeNull();
+      expect(await room.readRoleForSeat(target.seat)).toBe(true);
+      expect(jumpSpy).toHaveBeenCalledTimes(1);
+      expect(outsiderEvents).toEqual([]);
+      for (const [ev, payload] of publicEvents) {
+        if (ev === 'simulatedRole') expect(payload).toEqual({ isParasite: false });
+        else expect(JSON.stringify(payload)).not.toMatch(/isParasite|callerSeat|targetSeat|botHosts|simulatedRoles/);
+      }
+    } finally {
+      human.disconnect();
+      observer.disconnect();
+      outsider.disconnect();
+      readSpy?.mockRestore();
+      jumpSpy?.mockRestore();
+      rng.mockRestore();
+    }
+  });
+
+  it('enrolls the complete simulated roster including a bot Parasite over the wire', async () => {
+    const code = 'BOTENROLL';
+    const rng = vi.spyOn(Math, 'random').mockReturnValue(0.3);
+    const human = connect();
+    try {
+      const joined = await join(human, 'Solo', code);
+      const startedEvent = once<any>(human, 'gameStarted');
+      const roleEvent = once<any>(human, 'simulatedRole');
+      expect(await new Promise((res) => human.emit('startGame', res))).toEqual({ ok: true });
+      expect((await startedEvent).seats).toEqual(
+        joined.state.players.map((p: any) => ({ seat: p.seat, address: p.address }))
+      );
+      const room = game.roomFor(code)!;
+      expect(room.bySeat(1)?.isBot).toBe(true);
+      expect(await room.readRoleForSeat(1)).toBe(true);
+      expect(await roleEvent).toEqual({ isParasite: false });
+    } finally {
+      human.disconnect();
+      rng.mockRestore();
     }
   });
 
@@ -327,6 +459,56 @@ describe('GameServer (socket integration)', () => {
     expect(await room.readRoleForSeat(targetPlayer.seat)).toBe(true);
 
     for (const s of clients) s.disconnect();
+  });
+
+  it('privately delivers bot Jump roles to joined humans without broadcasting the host', async () => {
+    const code = 'BOTJUMPWIRE';
+    const rng = vi.spyOn(Math, 'random').mockReturnValue(0.3);
+    const human = connect();
+    const observer = connect();
+    const outsider = connect();
+    const roles: boolean[] = [];
+    const observerRoles: boolean[] = [];
+    const outsiderEvents: string[] = [];
+    const publicEvents: [string, any][] = [];
+    human.on('simulatedRole', (p) => roles.push(p.isParasite));
+    observer.on('simulatedRole', (p) => observerRoles.push(p.isParasite));
+    observer.onAny((ev, p) => publicEvents.push([ev, p]));
+    outsider.onAny((ev) => outsiderEvents.push(ev));
+    try {
+      await join(human, 'Receiver', code);
+      await join(observer, 'Observer', code);
+      await new Promise((res) => human.emit('startGame', res));
+      await expect.poll(() => roles.length).toBe(1);
+      await expect.poll(() => observerRoles.length).toBe(1);
+      const room = game.roomFor(code)!;
+      const bot = room.bySeat(1)!;
+      expect(bot.isBot).toBe(true);
+      expect(await room.readRoleForSeat(bot.seat)).toBe(true);
+      for (const p of room.players.values()) Object.assign(p, { x: 290, y: 250 });
+      Object.assign(bot, { x: 800, y: 600 });
+      Object.assign(room.players.get(human.id!)!, { x: 830, y: 600 });
+      roles.length = 0;
+      observerRoles.length = 0;
+      publicEvents.length = 0;
+      rng.mockReturnValue(0);
+      await expect.poll(() => roles.includes(true)).toBe(true);
+      expect(await room.readRoleForSeat(bot.seat)).toBe(false);
+      expect(await room.readRoleForSeat(0)).toBe(true);
+      await expect.poll(() => observerRoles.length > 0).toBe(true);
+      expect(observerRoles.every((v) => v === false)).toBe(true);
+      expect(outsiderEvents).toEqual([]);
+      expect(publicEvents.every(([ev]) => ['positions', 'simulatedRole', 'state', 'you'].includes(ev))).toBe(true);
+      for (const [ev, payload] of publicEvents) {
+        if (ev !== 'simulatedRole') expect(JSON.stringify(payload)).not.toMatch(/isParasite|callerSeat|targetSeat|botHosts/);
+        else expect(payload).toEqual({ isParasite: false });
+      }
+    } finally {
+      human.disconnect();
+      observer.disconnect();
+      outsider.disconnect();
+      rng.mockRestore();
+    }
   });
 
   it('rejects reportChainGameId outside Inco mode', async () => {

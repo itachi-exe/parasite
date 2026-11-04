@@ -1,0 +1,281 @@
+{
+  "scope": "Simulated full-roster bot enrollment and single-flight human/bot Jump role settlement. Wallet-only Inco gates, sight constants, contracts and visual implementation unchanged.",
+  "base_commit": "a74c2be4bdd740533276037d67c5e55395e03d8f",
+  "observed_parent_route": {
+    "model": "gpt-6.1-sol",
+    "provider": "custom:agentrouter"
+  },
+  "observed_specialist": {
+    "session": {
+      "id": "20261104_133723_6a84e5",
+      "model": "gpt-6.1-sol",
+      "end_reason": "agent_close",
+      "billing_provider": "custom:agentrouter",
+      "billing_base_url": "http://127.0.0.1:8991/v1",
+      "api_call_count": 38
+    },
+    "usage": [
+      {
+        "model": "gpt-6.1-sol",
+        "billing_provider": "custom:agentrouter",
+        "billing_base_url": "http://127.0.0.1:8991/v1",
+        "api_call_count": 38
+      }
+    ]
+  },
+  "requested_native_delegation_bundle": {
+    "model": "gpt-6.1-sol",
+    "provider": "custom:agentrouter",
+    "base_url": "http://127.0.0.1:8991/v1",
+    "api_mode": "codex_responses",
+    "fallback": "gemini-3.5-flash/gemini",
+    "credentials": "Resolved natively, never printed or copied."
+  },
+  "workspace_tests": {
+    "counts": {
+      "shared": 29,
+      "server": 97,
+      "local_contracts": 45,
+      "web": 4
+    },
+    "total_passed": 175,
+    "command": "NODE_OPTIONS=--max-old-space-size=1024 npm test",
+    "exit_code": 0
+  },
+  "root_typecheck": {
+    "command": "NODE_OPTIONS=--max-old-space-size=1024 npm run typecheck",
+    "exit_code": 0
+  },
+  "production_build": {
+    "command": "NODE_OPTIONS=--max-old-space-size=1024 CIRCLE_NODE_TOTAL=2 NEXT_PUBLIC_SERVER_URL=http://127.0.0.1:9201 NEXT_PUBLIC_PARASITE_GAME_ADDRESS= npm run build",
+    "exit_code": 0,
+    "initial_available_mb": 1994,
+    "hard_budget_seconds": 240,
+    "heap_cap_mb": 1024,
+    "live_environment_or_credentials_used": false
+  },
+  "tdd_evidence": {
+    "preserved_previous_pairs": [
+      {
+        "behavior": "01-enrollment",
+        "red_failed_tests": 1,
+        "green_passed_tests": 1
+      },
+      {
+        "behavior": "02-role-intent",
+        "red_failed_tests": 1,
+        "green_passed_tests": 1
+      },
+      {
+        "behavior": "03-transfer-intent",
+        "red_failed_tests": 1,
+        "green_passed_tests": 1
+      },
+      {
+        "behavior": "04-bot-jump-wire",
+        "red_failed_tests": 1,
+        "green_passed_tests": 1
+      },
+      {
+        "behavior": "05-inflight",
+        "red_failed_tests": 1,
+        "green_passed_tests": 2
+      },
+      {
+        "behavior": "06-errors",
+        "red_failed_tests": 1,
+        "green_passed_tests": 1
+      },
+      {
+        "behavior": "07-refresh-error",
+        "red_failed_tests": 1,
+        "green_passed_tests": 1
+      }
+    ],
+    "recovery_red_failed_tests": 6,
+    "recovery_green_passed_tests": 6,
+    "recovery_red_unhandled_start_errors": 2,
+    "recovery_green_unhandled_errors": 0,
+    "historical_logs": "/opt/hermes/.hermes/cache/scratch/parasite-bot-jump-20261104",
+    "recovery_logs": "/opt/hermes/.hermes/cache/scratch/parasite-bot-jump-recovery-20261104-1331"
+  },
+  "local_ui_smoke": {
+    "scope": "Actual compiled GameServer and production Next UI, one joined human and three native bots. Seeded simulated oracle/intent, controlled starting positions and paused irrelevant crew intent. Normal product meeting timings. Not a ten-minute endurance run or live Inco proof.",
+    "screenshots": [
+      "/opt/hermes/projects/parasite-v2/shots/v2/site/bot-jump/lobby-bots.png"
+    ],
+    "skippedScreenshots": [
+      "bot-to-human-reveal: 1431 MB available, below 1500 MB.",
+      "body-report-meeting: 1378 MB available, below 1500 MB.",
+      "crew-win: 1456 MB available, below 1500 MB."
+    ],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "outboundActions": [
+      "startGame",
+      "purge",
+      "jumpAnnounce",
+      "reportBody",
+      "castVote"
+    ],
+    "capture_memory_mb": {
+      "lobby-bots": 1796,
+      "bot-to-human-reveal": 1431,
+      "body-report-meeting": 1378,
+      "crew-win": 1456
+    },
+    "botTransfers": [
+      {
+        "callerSeat": 1,
+        "targetSeat": 0
+      },
+      {
+        "callerSeat": 0,
+        "targetSeat": 1
+      }
+    ],
+    "privateHumanRoles": [
+      false,
+      true,
+      false
+    ],
+    "publicRoleLeaks": [],
+    "outsiderEvents": [],
+    "keyboardMovement": {
+      "before": {
+        "x": 910,
+        "y": 600
+      },
+      "after": {
+        "x": 910,
+        "y": 638.76
+      }
+    },
+    "roleRevealDom": "infection detectedYOU ARE THE PARASITENobody else knows. Not even whoever infected you. Move carefully.",
+    "sourceTaskCreditsBeforeHandoff": 0,
+    "sourceTaskCreditsAfterHandoff": 0,
+    "meetingResult": {
+      "ejectedSeat": 1,
+      "tie": false,
+      "tally": {
+        "1": 2,
+        "3": 1
+      },
+      "ejectedWasParasite": true
+    },
+    "end": {
+      "winner": "crew",
+      "reason": "crew-ejected-parasite",
+      "revealedParasiteSeat": 1
+    },
+    "result": {
+      "botEnrollment": true,
+      "oneHumanThreeBots": true,
+      "renderedMovement": true,
+      "ordinaryBotToHumanJump": true,
+      "roleReveal": true,
+      "renderedHumanToBotJump": true,
+      "renderedPurge": true,
+      "renderedBodyReport": true,
+      "renderedVote": true,
+      "nativeBotVotes": true,
+      "ejectionAndFinalReveal": true,
+      "crewWin": true,
+      "privateWireDelivery": true,
+      "positionPackets": 1237
+    },
+    "elapsed_ms": 85639
+  },
+  "first_ui_attempt": {
+    "exit_code": 1,
+    "cause": "The harness incorrectly assumed zero prior task credits for a bot becoming the host. Legitimate earlier crew work survives handoffs. Only the harness baseline assertion was corrected; no production workaround.",
+    "cleanup_fix": "Stop simulation tick before restoring injected randomness and awaiting browser shutdown.",
+    "recorded_failure": "AssertionError [ERR_ASSERTION]: incoming Parasite bot never completes crew work\n\n1 !== 0\n\n    at file:///opt/hermes/.hermes/cache/scratch/parasite-bot-jump-recovery-20261104-1331/bot-ui-smoke.mjs:172:10"
+  },
+  "screenshots": [
+    {
+      "path": "/opt/hermes/projects/parasite-v2/shots/v2/site/bot-jump/bot-to-human-reveal.png",
+      "width": 1280,
+      "height": 720,
+      "bytes": 391231,
+      "sha256": "400489211473f842fe5cec55d47afdbb555afcafbc7e9081195f2fd9508ccf9a",
+      "source": "First UI attempt, actual bot handoff before the later fixture assertion failed; screenshot retained because the successful rerun skipped this capture below 1500 MB.",
+      "capture_available_mb": 1509
+    },
+    {
+      "path": "/opt/hermes/projects/parasite-v2/shots/v2/site/bot-jump/lobby-bots.png",
+      "width": 1280,
+      "height": 720,
+      "bytes": 584777,
+      "sha256": "4580a31542a57679bd89c569c1a7d22a690b509c5540fdf8e66acdbb025d2f9c",
+      "source": "Successful second UI run.",
+      "capture_available_mb": 1796
+    }
+  ],
+  "resource_cleanup": {
+    "local_runner_exit": 0,
+    "preview_ports_free": true,
+    "task_temp_removed": true,
+    "minimum_available_mb": 1140
+  },
+  "review": {
+    "mode": "One-shot focused parent review of every changed file, baseline-aware tests, added-line static scan and real built/UI execution.",
+    "static_security_matches": {
+      "hardcoded_secrets": 0,
+      "shell_injection": 0,
+      "dynamic_code": 0,
+      "unsafe_deserialization": 0,
+      "formatted_sql": 0
+    },
+    "art_approval": false,
+    "native_image_review_exit_code": 0,
+    "observed_image_review": {
+      "session": {
+        "id": "20261104_141930_ac984b",
+        "model": "gpt-6.1-sol",
+        "end_reason": "cli_close",
+        "billing_provider": "custom",
+        "billing_base_url": "http://127.0.0.1:8991/v1",
+        "api_call_count": 3
+      },
+      "usage": [
+        {
+          "model": "gpt-6.1-sol",
+          "billing_provider": "custom",
+          "billing_base_url": "http://127.0.0.1:8991/v1",
+          "api_call_count": 3
+        }
+      ]
+    },
+    "native_image_result": {
+      "saw_pixels": false,
+      "observed_text": "Not observed; attachment pixels were unavailable.",
+      "money_shot_readability": "Review blocked. Readability cannot be judged without seeing the frame.",
+      "art_direction_match": "Not assessed. LOADOUT_PLAN.md was read, but no visual verdict is supportable.",
+      "concrete_issues": [],
+      "recommendation": "Repeat this same role-reveal review with the PNG successfully supplied through native --image."
+    },
+    "blocker": "Approved native GPT image-review session reported no accessible attachment pixels. Subsequent UI captures were independently skipped below the 1500 MB memory floor."
+  },
+  "source_sha256": {
+    "packages/server/src/GameRoom.ts": "699ccd33b263ec6028aeea68b92f76b88b6959b430c18e24a37fc6a672425820",
+    "packages/server/src/GameRoom.test.ts": "ff96681a97b783c38305748078bbe3af6d0953e65764f61f7f6fc36b522988cb",
+    "packages/server/src/GameServer.ts": "463e76f7d6cac7cf4b80dd4463210a763122eb7b5c8861db4a423424d63d4e42",
+    "packages/server/src/GameServer.test.ts": "33eda090c07561dbc747b45c067685b34c49afbfc602125ed899cf5eba2e4fc1",
+    "packages/shared/src/types.ts": "d4634e82d5e216099fa0c816704dce0edc680dc85f756cda31228566ac5ad4cd"
+  },
+  "raw_logs_scratch": "/opt/hermes/.hermes/cache/scratch/parasite-bot-jump-recovery-20261104-1331",
+  "open_gates": [
+    "Unseeded ten-minute one-human endurance round",
+    "Whole-site UI rebuild and fog/material screenshot review",
+    "Live Inco/private range proof and normal-GPU performance",
+    "30-45 second gameplay clip plus 15-second cut and written submission deliverables"
+  ],
+  "boundaries": {
+    "push": false,
+    "live_site_or_ashe_tree_access": false,
+    "cron_or_configuration_changes": false,
+    "transactions_or_new_spend": false,
+    "preexisting_untracked_shots": "Preserved"
+  }
+}

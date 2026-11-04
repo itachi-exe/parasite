@@ -105,6 +105,7 @@ export interface GameRoomOptions {
 
 export type Emit =
   | { type: 'state' }
+  | { type: 'rolesUpdated' }
   | { type: 'gameStarted'; chainGameId: string | null }
   | { type: 'meetingStarted'; reason: MeetingReason; endsAt: number }
   | { type: 'meetingResult'; result: MeetingResult }
@@ -156,9 +157,14 @@ export class GameRoom {
   private lastTickAt: number;
   /** Seat awaiting an ejection reveal, if any. */
   private pendingEjection: Seat | null = null;
-  /** Bot seats that currently hold the Parasite (simulated mode only), polled ~1/s. */
+  /** Private simulated roles are committed together, never serialized. */
+  private simulatedRoles = new Map<Seat, boolean>();
   private botHosts = new Set<Seat>();
-  private botHostPollAt = 0;
+  private botRolesReady = false;
+  private jumpInFlight = false;
+  private pendingJump: Promise<void> | null = null;
+  private roleUpdatePending = false;
+  private roleRetryAt = 0;
 
   constructor(opts: GameRoomOptions) {
     this.code = opts.code;
@@ -315,19 +321,28 @@ export class GameRoom {
     if (byId !== this.hostId) return fail('Only the lobby host can start the game.');
     const can = this.canStart();
     if (!can.ok) return can;
+    if (this.roleMode === 'simulated' && !this.localOracle) return fail('Role assignment is unavailable.');
 
     this.phase = 'assigning';
 
     if (this.roleMode === 'simulated' && this.localOracle) {
-      // Humans only. A bot has no wallet, so in Inco mode it could never
-      // decrypt a role it was given — it would be a Parasite that does not
-      // know it is one, and the round would be unwinnable. Excluded in
-      // simulated mode too, so both modes behave identically.
-      const seats = [...this.players.values()]
-        .filter((p) => !p.isBot)
-        .map((p) => ({ seat: p.seat, address: p.address }));
-      const { gameId } = await this.localOracle.startGame({ seats });
-      this.chainGameId = gameId;
+      try {
+        const seats = [...this.players.values()]
+          .sort((a, b) => a.seat - b.seat)
+          .map((p) => ({ seat: p.seat, address: p.address }));
+        const { gameId } = await this.localOracle.startGame({ seats });
+        this.chainGameId = gameId;
+        await this.refreshBotHosts();
+      } catch {
+        this.phase = 'lobby';
+        this.chainGameId = null;
+        this.botRolesReady = false;
+        this.botHosts.clear();
+        this.simulatedRoles.clear();
+        for (const p of this.players.values()) if (!p.connected) this.disconnect(p.id);
+        this.syncBots();
+        return fail('Role assignment could not be completed. Try again.');
+      }
     }
 
     this.phase = 'playing';
@@ -411,8 +426,7 @@ export class GameRoom {
       seat,
       name,
       skin: (seat % 4) as SkinId,
-      // No wallet: a bot cannot decrypt anything, which is also why it is never
-      // eligible to be the Parasite.
+      // Walletless bots participate only in simulated role assignment.
       address: null,
       x: SPAWN_CENTER.x + Math.cos(angle) * SPAWN_RADIUS,
       y: SPAWN_CENTER.y + Math.sin(angle) * SPAWN_RADIUS,
@@ -453,11 +467,6 @@ export class GameRoom {
   private stepBots(now: number): Emit[] {
     const emits: Emit[] = [];
 
-    if (this.phase === 'playing' && now >= this.botHostPollAt && this.botSeats().length > 0) {
-      this.botHostPollAt = now + 1000;
-      void this.refreshBotHosts();
-    }
-
     for (const p of this.players.values()) {
       const b = p.bot;
       if (!b || !p.alive) {
@@ -468,15 +477,22 @@ export class GameRoom {
         continue;
       }
 
-      if (this.phase === 'meeting') {
+      if (this.phase === 'meeting' || this.jumpInFlight || !this.botRolesReady) {
         p.ax = 0;
         p.ay = 0;
         continue;
       }
       if (this.phase !== 'playing') continue;
 
+      const isHost = this.botHosts.has(p.seat);
+      if (isHost && b.taskId) {
+        b.taskId = null;
+        b.target = null;
+        b.actAt = 0;
+      }
+
       // Mid-task: stand still until it finishes.
-      if (b.actAt > now) {
+      if (!isHost && b.actAt > now) {
         p.ax = 0;
         p.ay = 0;
         continue;
@@ -484,7 +500,7 @@ export class GameRoom {
 
       // Arrived at a task station: complete it through the public entry point
       // so range and phase are validated the same as for a human.
-      if (b.taskId && b.target && distance(p, b.target) <= TASK_INTERACT_RADIUS) {
+      if (!isHost && b.taskId && b.target && distance(p, b.target) <= TASK_INTERACT_RADIUS) {
         const { emits: e } = this.completeTask(p.id, b.taskId);
         emits.push(...e);
         b.taskId = null;
@@ -497,7 +513,8 @@ export class GameRoom {
       }
 
       if (this.botHosts.has(p.seat)) {
-        // Parasite bot: strike a lone target, never report.
+        // Parasite bots transfer or strike through the same public rules as humans.
+        if (this.botJump(p, now)) continue;
         if (this.botPurge(p, now, emits)) continue;
       } else if (this.bodies.length > 0) {
         // Crew bot: a body in sight is reported, never ignored.
@@ -551,19 +568,72 @@ export class GameRoom {
   }
 
   private async refreshBotHosts(): Promise<void> {
+    this.botRolesReady = false;
+    const roles = new Map<Seat, boolean>();
     const next = new Set<Seat>();
-    for (const seat of this.botSeats()) {
-      if ((await this.readRoleForSeat(seat)) === true) next.add(seat);
+    for (const p of [...this.players.values()].sort((a, b) => a.seat - b.seat)) {
+      const role = await this.readRoleForSeat(p.seat);
+      if (typeof role !== 'boolean') throw new Error('Simulated role is unavailable.');
+      roles.set(p.seat, role);
+      if (p.isBot && role) next.add(p.seat);
     }
+    for (const p of this.players.values()) {
+      if (p.bot && next.has(p.seat) !== this.botHosts.has(p.seat)) {
+        p.bot.taskId = null;
+        p.bot.target = null;
+        p.bot.actAt = 0;
+        p.ax = 0;
+        p.ay = 0;
+      }
+    }
+    this.simulatedRoles = roles;
     this.botHosts = next;
+    this.botRolesReady = true;
+  }
+
+  private retryRoleDelivery(): void {
+    this.roleUpdatePending = true;
+    this.roleRetryAt = this.now() + 1000;
+  }
+
+  /** Error-driven recovery on the existing tick adapter, not normal role polling. */
+  async recoverSimulatedRoles(): Promise<void> {
+    if (this.roleMode !== 'simulated' || !this.chainGameId || this.botRolesReady || this.jumpInFlight) return;
+    this.jumpInFlight = true;
+    try {
+      await this.refreshBotHosts();
+    } catch {
+      this.retryRoleDelivery();
+    } finally {
+      this.jumpInFlight = false;
+    }
+  }
+
+  /** Own-role delivery reads a settled cache synchronously, so transfers cannot interleave. */
+  simulatedRoleForSeat(seat: Seat): boolean | null {
+    if (this.roleMode !== 'simulated' || !this.botRolesReady || this.jumpInFlight) return null;
+    return this.simulatedRoles.get(seat) ?? null;
+  }
+
+  /** Ordinary simulated intent; completion returns through the synchronous tick adapter. */
+  private botJump(p: RoomPlayer, now: number): boolean {
+    if (now - p.lastJumpAt < JUMP_COOLDOWN_MS) return false;
+    const target = [...this.players.values()]
+      .filter((o) => o.alive && o.id !== p.id && distance(p, o) <= JUMP_RANGE)
+      .sort((a, b) => distance(p, a) - distance(p, b))[0];
+    if (!target || Math.random() > 0.02) return false;
+    p.ax = 0;
+    p.ay = 0;
+    void this.jumpAnnounce(p.id, target.seat)
+      .then((result) => { if (result.ok) this.roleUpdatePending = true; })
+      .catch(() => {});
+    return true;
   }
 
   /**
    * Parasite bot attack: purge the nearest living player when nobody else
    * could see it (no third player within 220 px). Goes through the public
    * purge() so range, cooldown and win checks are the human rules.
-   * shortcut: bots never Jump (a jump into a human needs a role re-delivery
-   * from GameServer), upgrade with a 'roleChanged' emit.
    */
   private botPurge(p: RoomPlayer, now: number, emits: Emit[]): boolean {
     if (now - p.lastPurgeAt < PURGE_COOLDOWN_MS) return false;
@@ -582,7 +652,7 @@ export class GameRoom {
   /** Choose the next place a bot walks to: an unfinished task, else a wander. */
   private retargetBot(p: RoomPlayer, b: BotBrain, forceWander = false): void {
     const undone = TASK_IDS.filter((t) => !p.tasks.has(t));
-    if (!forceWander && undone.length > 0 && Math.random() < 0.75) {
+    if (!forceWander && !this.botHosts.has(p.seat) && undone.length > 0 && Math.random() < 0.75) {
       const id = undone[Math.floor(Math.random() * undone.length)]!;
       b.taskId = id;
       b.target = { ...TASK_STATIONS[id] };
@@ -654,7 +724,9 @@ export class GameRoom {
     const dtMs = Math.min(now - this.lastTickAt, TICK_MS * 5);
     this.lastTickAt = now;
     const dt = dtMs / 1000;
-    const emits: Emit[] = [];
+    const deliverRoles = this.roleUpdatePending && now >= this.roleRetryAt;
+    const emits: Emit[] = deliverRoles ? [{ type: 'rolesUpdated' }] : [];
+    if (deliverRoles) this.roleUpdatePending = false;
 
     // Bots decide before movement integrates, so their intent is applied on
     // the same tick as a human's held key rather than one behind it.
@@ -767,6 +839,10 @@ export class GameRoom {
     if (!p) return { result: fail('Not in this game.'), emits: [] };
     if (this.phase !== 'playing') return { result: fail('Not during a meeting.'), emits: [] };
     if (!p.alive) return { result: fail('You are dead.'), emits: [] };
+    // A pending transfer must settle before any potential target can become a corpse.
+    if (this.roleMode === 'simulated' && (this.jumpInFlight || !this.botRolesReady)) {
+      return { result: fail('Jump is still resolving.'), emits: [] };
+    }
 
     const now = this.now();
     if (now - p.lastPurgeAt < PURGE_COOLDOWN_MS) {
@@ -833,15 +909,31 @@ export class GameRoom {
 
     const now = this.now();
     if (now - p.lastJumpAt < JUMP_COOLDOWN_MS) return fail('Jump is still recharging.');
+    if (this.jumpInFlight || (this.roleMode === 'simulated' && !this.botRolesReady)) return fail('Jump is still resolving.');
     p.lastJumpAt = now;
 
     if (this.roleMode === 'simulated' && this.localOracle && this.chainGameId) {
-      await this.localOracle.jump({
-        gameId: this.chainGameId,
-        callerSeat: p.seat,
-        targetSeat,
-        decoy: false, // unused by LocalRoleOracle, kept for interface symmetry with Inco
-      });
+      this.jumpInFlight = true;
+      try {
+        this.pendingJump = this.localOracle.jump({
+          gameId: this.chainGameId,
+          callerSeat: p.seat,
+          targetSeat,
+          decoy: false, // unused by LocalRoleOracle, kept for interface symmetry with Inco
+        });
+        await this.pendingJump;
+        try {
+          await this.refreshBotHosts();
+        } catch {
+          // The oracle already accepted the real or decoy attempt; only delivery needs retrying.
+          this.retryRoleDelivery();
+        }
+      } catch {
+        return fail('Jump could not be resolved. Try again.');
+      } finally {
+        this.pendingJump = null;
+        this.jumpInFlight = false;
+      }
     }
     return OK;
   }
@@ -987,6 +1079,7 @@ export class GameRoom {
     if (now >= m.endsAt) {
       const ejectedSeat = m.result?.ejectedSeat ?? null;
       const wasParasite = m.result?.ejectedWasParasite ?? null;
+      if (this.roleMode === 'simulated' && ejectedSeat !== null && wasParasite === null) return emits;
       this.meeting = null;
       this.pendingEjection = null;
       this.phase = 'playing';
@@ -1025,12 +1118,16 @@ export class GameRoom {
   }
 
   /** Simulated mode only: resolve the reveal from the room's own oracle. */
-  async resolveEjectionLocally(): Promise<Emit[]> {    if (this.roleMode !== 'simulated' || !this.localOracle || !this.chainGameId) return [];
-    if (this.pendingEjection === null) return [];
-    const was = await this.localOracle.revealIsHost({
-      gameId: this.chainGameId,
-      seat: this.pendingEjection,
-    });
+  async resolveEjectionLocally(): Promise<Emit[]> {
+    if (this.roleMode !== 'simulated' || !this.localOracle || !this.chainGameId) return [];
+    const meeting = this.meeting;
+    const seat = this.pendingEjection;
+    if (seat === null) return [];
+    // An admitted transfer is ordered before the sanctioned reveal, even if its await is delayed.
+    if (this.pendingJump) await this.pendingJump.catch(() => {});
+    if (this.meeting !== meeting || this.pendingEjection !== seat) return [];
+    const was = await this.localOracle.revealIsHost({ gameId: this.chainGameId, seat });
+    if (this.meeting !== meeting || this.pendingEjection !== seat) return [];
     return this.submitEjectionReveal(was);
   }
 
@@ -1105,6 +1202,7 @@ export class GameRoom {
   async resolveFinalRevealLocally(): Promise<Emit[]> {
     if (this.roleMode !== 'simulated' || !this.localOracle || !this.chainGameId) return [];
     if (!this.end || this.end.revealedParasiteSeat !== null) return [];
+    if (this.pendingJump) await this.pendingJump.catch(() => {});
     const seat = await this.localOracle.revealHostSeat({ gameId: this.chainGameId });
     return this.setRevealedParasite(seat);
   }
