@@ -3,12 +3,7 @@
 import type { EndState, PublicPlayer } from '@parasite/shared';
 import { useDialog } from '@/hooks/useDialog';
 
-const SKIN_SRC = [
-  '/sprites/human-0.png',
-  '/sprites/human-1.png',
-  '/sprites/human-2.png',
-  '/sprites/human-3.png',
-];
+import { portraitPath } from '../game/presentation';
 
 const REASON_TEXT: Record<EndState['reason'], string> = {
   'crew-tasks': 'All outpost tasks were completed.',
@@ -21,8 +16,8 @@ const REASON_TEXT: Record<EndState['reason'], string> = {
  * Game-over screen. Shows the winner and, for the Parasite win, the final host
  * seat that the contract reveals on-chain at game over.
  */
-export default function EndOverlay(props: { end: EndState; players: PublicPlayer[] }) {
-  const { end, players } = props;
+export default function EndOverlay(props: { end: EndState; players: PublicPlayer[]; roleMode?: 'inco' | 'simulated' }) {
+  const { end, players, roleMode = 'simulated' } = props;
 
   // No onClose: the game is over, there is nothing to dismiss back to.
   const dialogRef = useDialog();
@@ -61,19 +56,14 @@ export default function EndOverlay(props: { end: EndState; players: PublicPlayer
         */}
         {!crewWon && !parasite && (
           <div className="mono-note" role="status">
-            The Parasite&apos;s host seat is decrypted on-chain with{' '}
-            <code>e.reveal</code> at game over. Waiting for that reveal to land…
+            {roleMode === 'inco' ? 'Waiting for the on-chain host reveal.' : 'Waiting for the final host reveal.'}
           </div>
         )}
 
         {!crewWon && parasite && (
           <div className="banner parasite" role="status">
             <img
-              src={
-                parasite.skin !== undefined
-                  ? SKIN_SRC[parasite.skin % 4]
-                  : '/sprites/parasite.png'
-              }
+              src={portraitPath(parasite.seat, parasite.skin, 'parasite')}
               alt=""
               style={{ width: 64, height: 64, objectFit: 'contain', verticalAlign: 'middle' }}
             />{' '}
@@ -83,8 +73,7 @@ export default function EndOverlay(props: { end: EndState; players: PublicPlayer
 
         {crewWon && (
           <div className="mono-note">
-            The Parasite&apos;s host seat is still encrypted on-chain. Only a game-over
-            reveal would publish it.
+            {roleMode === 'inco' ? 'The host seat remains encrypted unless publicly revealed.' : 'Local practice round. Roles were not encrypted.'}
           </div>
         )}
 

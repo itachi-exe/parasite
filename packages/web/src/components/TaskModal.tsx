@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { TASK_DEFS, type TaskId } from '@parasite/shared';
 import { useDialog } from '@/hooks/useDialog';
 
@@ -17,10 +17,34 @@ import { useDialog } from '@/hooks/useDialog';
  */
 export default function TaskModal(props: {
   taskId: TaskId;
-  onComplete: () => void;
+  onComplete: () => boolean | Promise<boolean>;
   onClose: () => void;
 }) {
   const def = TASK_DEFS.find((t) => t.id === props.taskId)!;
+  const completeRef = useRef(props.onComplete);
+  completeRef.current = props.onComplete;
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [saveError, setSaveError] = useState('');
+  const finish = useCallback(async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError('');
+    try {
+      if (!await completeRef.current()) {
+        setSaveError('Task was not saved. Try again.');
+        setAttempt((n) => n + 1);
+      }
+    } catch {
+      setSaveError('Task was not saved. Try again.');
+      setAttempt((n) => n + 1);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }, []);
 
   // This one IS dismissible — cancelling a task is a legal move — so Escape
   // closes it, matching the backdrop click that was already here.
@@ -39,18 +63,22 @@ export default function TaskModal(props: {
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="task-heading">{def.name}</h2>
+        <fieldset className="task-controls" disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
         {def.kind === 'hold' && (
-          <HoldTask durationMs={'durationMs' in def ? def.durationMs : 4000} onDone={props.onComplete} />
+          <HoldTask durationMs={'durationMs' in def ? def.durationMs : 4000} key={attempt} onDone={finish} />
         )}
         {def.kind === 'sequence' && (
-          <SequenceTask steps={'steps' in def ? def.steps : 4} onDone={props.onComplete} />
+          <SequenceTask steps={'steps' in def ? def.steps : 4} key={attempt} onDone={finish} />
         )}
         {def.kind === 'clicks' && (
-          <ClickTask steps={'steps' in def ? def.steps : 5} onDone={props.onComplete} />
+          <ClickTask steps={'steps' in def ? def.steps : 5} key={attempt} onDone={finish} />
         )}
         {def.kind === 'slider' && (
-          <SliderTask steps={'steps' in def ? def.steps : 3} onDone={props.onComplete} />
+          <SliderTask steps={'steps' in def ? def.steps : 3} key={attempt} onDone={finish} />
         )}
+        </fieldset>
+        {saving && <p role="status">Saving task…</p>}
+        {saveError && <p className="field-error" role="alert">{saveError}</p>}
         <button className="btn" onClick={props.onClose} style={{ marginTop: 12 }}>
           Cancel <span className="muted">(Esc)</span>
         </button>

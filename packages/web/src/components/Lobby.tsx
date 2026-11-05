@@ -6,12 +6,9 @@ import { useDialog } from '@/hooks/useDialog';
 import MenuBackdrop from './MenuBackdrop';
 import ChatPanel from './ChatPanel';
 
-const SKIN_SRC = [
-  '/sprites/human-0.png',
-  '/sprites/human-1.png',
-  '/sprites/human-2.png',
-  '/sprites/human-3.png',
-];
+import { portraitPath } from '../game/presentation';
+
+const SKIN_SRC = [0, 1, 2, 3].map((skin) => portraitPath(0, skin));
 
 const SKIN_NAME = ['Amber', 'Indigo', 'Rust', 'Slate'];
 
@@ -109,7 +106,7 @@ export default function Lobby(props: {
           <ul className="crew-strip">
             {state?.players.map((p) => (
               <li key={p.seat} className={`crew-chip${p.isBot ? ' bot' : ''}`}>
-                <img src={SKIN_SRC[p.skin % 4]} alt="" />
+                <img src={portraitPath(p.seat, p.skin)} alt="" />
                 <span>
                   {p.name}
                   {p.isBot ? ' (bot)' : ''}
@@ -151,9 +148,10 @@ export default function Lobby(props: {
 
       {/* Top-left: what the reference uses for account state. Ours carries the
           only status a player can act on — whether the server is reachable. */}
-      <div className="menu-status" role="status">
+      <div className="menu-status" role="status" aria-live="polite" aria-busy={!connected}>
         <span className={`dot${connected ? ' live' : ''}`} aria-hidden="true" />
         <span>{connected ? 'OUTPOST ONLINE' : 'CONNECTING…'}</span>
+        {!connected && <span className="connection-skeleton" aria-hidden="true" />}
       </div>
 
       <button

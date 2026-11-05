@@ -69,6 +69,68 @@ describe('GameServer (socket integration)', () => {
     return ack;
   }
 
+  it('reaps an active bot room when no human is connected', async () => {
+    const code = 'ACTIVECLEANUP';
+    const human = connect();
+    expect((await join(human, 'Solo', code)).ok).toBe(true);
+    expect(await human.timeout(800).emitWithAck('startGame')).toEqual({ ok: true });
+    expect(game.roomFor(code)?.phase).toBe('playing');
+    human.disconnect();
+    await expect.poll(() => game.roomFor(code), { timeout: 1000 }).toBeUndefined();
+  });
+
+  it('reaps a finished bot room after the final human disconnects', async () => {
+    const code = 'ENDEDCLEANUP';
+    const human = connect();
+    expect((await join(human, 'Solo', code)).ok).toBe(true);
+    expect(await human.timeout(800).emitWithAck('startGame')).toEqual({ ok: true });
+    const room = game.roomFor(code)!;
+    expect([...room.players.values()].filter((p) => p.isBot)).toHaveLength(3);
+    room.endGame('crew', 'crew-tasks');
+    human.disconnect();
+    await expect.poll(() => game.roomFor(code), { timeout: 1000 }).toBeUndefined();
+  });
+
+  it('does not leak a removed room flush into a fresh room that reuses the code', async () => {
+    const code = 'REUSESAFE';
+    const oldHuman = connect();
+    expect((await join(oldHuman, 'Old host', code)).ok).toBe(true);
+    expect(await oldHuman.timeout(800).emitWithAck('startGame')).toEqual({ ok: true });
+
+    const oldRoom = game.roomFor(code)!;
+    let releaseReveal!: (emits: any[]) => void;
+    const pendingReveal = new Promise<any[]>((resolve) => {
+      releaseReveal = resolve;
+    });
+    const revealSpy = vi
+      .spyOn(oldRoom, 'resolveFinalRevealLocally')
+      .mockReturnValueOnce(pendingReveal);
+    const staleFlush = (game as any).flush(oldRoom, []);
+    await expect.poll(() => revealSpy.mock.calls.length).toBe(1);
+
+    oldHuman.disconnect();
+    await expect.poll(() => game.roomFor(code), { timeout: 1000 }).toBeUndefined();
+
+    const freshHuman = connect();
+    const staleEnds: any[] = [];
+    freshHuman.on('gameEnded', (end) => staleEnds.push(end));
+    expect((await join(freshHuman, 'Fresh host', code)).ok).toBe(true);
+    expect(game.roomFor(code)).not.toBe(oldRoom);
+
+    releaseReveal([
+      {
+        type: 'gameEnded',
+        end: { winner: 'crew', reason: 'crew-tasks', revealedParasiteSeat: null },
+      },
+    ]);
+    await staleFlush;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(staleEnds).toEqual([]);
+    expect(game.roomFor(code)?.phase).toBe('lobby');
+    freshHuman.disconnect();
+  });
+
   it('refreshes each client identity when lobby bots step aside', async () => {
     const ROOM = 'DENSEIDENTITY';
     const joined: Socket[] = [];

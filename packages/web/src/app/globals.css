@@ -1,63 +1,9 @@
-:root {
-  /* Neutral dark chrome, not green. Green was the base colour of every panel,
-     border and text tint here before — which is exactly backwards, because
-     --parasite below is ALSO green, and it is supposed to mean something
-     (infection/role-reveal) rather than being one more shade of a palette
-     that was already all one hue. Base chrome went cool neutral slate; the
-     signature interactive accent moved to cyan (matching the lab-a room
-     accent already in art/palette.ts) so it reads as its own colour instead
-     of a paler version of the parasite signal. Every ratio below was
-     recomputed against the new backgrounds, not carried over by assumption.
-   */
-  --bg-deep: #0a0e13;
-  --bg-panel: #131a20;
-  --bg-panel-2: #182029;
-  /* Boundary colour for inputs, panels and cards. 3.71:1 against --bg-panel,
-     clearing the 3:1 WCAG 1.4.11 floor for UI-component boundaries. */
-  --edge: #4a7a8a;
-  /* Decorative-only separator, for hairlines that are not a control boundary. */
-  --edge-soft: #2a4652;
-  --glow: #4ad9f0;
-  --glow-soft: #8fe3f5;
-  --text: #eaf4f5;
-  --text-dim: #93b8c2;
-  --danger: #ff5f7e;
-  --danger-dim: #c9506a;
-  --warn: #ffc861;
-  --parasite: #7cff4f;
-  /* Crew blue. --crew is the badge/banner tint; --crew-bright is the display
-     weight that has to hold up as a heading. */
-  --crew: #2f9fd6;
-  --crew-bright: #79c9ee;
-  /* Recessed fill (inputs, cards, wells). Darker than the panel it sits on so
-     the surface reads as inset even before its border is drawn. */
-  --inset: #080d11;
-  /* Motion tokens. 180ms micro / 240ms transitional, inside the 150-300ms
-     guideline; both collapse to 0.01ms under prefers-reduced-motion. */
-  --dur-fast: 180ms;
-  --dur-mid: 240ms;
-  --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
-  /* Minimum comfortable hit area for primary controls. */
-  --hit: 44px;
-}
-
+/* Existing interaction layout, restyled for the production PBR art. */
 * {
   box-sizing: border-box;
 }
 
-/* Focus is never removed, only restyled. Every interactive element inherits
-   this ring; :focus-visible keeps it off mouse clicks. */
-:focus-visible {
-  outline: 2px solid var(--glow);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  :root {
-    --dur-fast: 0.01ms;
-    --dur-mid: 0.01ms;
-  }
 
   *,
   *::before,
@@ -65,7 +11,6 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }
 
@@ -74,46 +19,17 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--bg-deep);
-  color: var(--text);
-  /* Was ui-monospace everywhere. A whole UI set in mono reads as a terminal or
-     a dashboard — it was the loudest "unfinished tool" signal on the screen.
-     The display face carries the interface now; mono is kept deliberately, for
-     the few places where it means something (contract addresses, codes). */
-  font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
-  font-weight: 500;
   overflow: hidden;
   overscroll-behavior: none;
 }
 
-/* Mono stays for machine text only — addresses, env keys, room codes. */
-code,
-.mono-note code,
-#lobby-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
 button {
-  font-family: inherit;
   cursor: pointer;
 }
-
-/* 0.42 put disabled button text at 3.56:1 and dim text at 2.55:1 — unreadable,
-   and the action bar sits disabled most of a round, so these labels are exactly
-   the ones a player squints at to learn why they cannot act. 0.65 keeps the
-   state clearly de-emphasised while holding 6.4:1. */
 button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
-  filter: saturate(0.55);
 }
-
-/* ── Shell ─────────────────────────────────────────────────────────────────── */
-
-/* 100dvh, not 100vh: on mobile browsers 100vh is the *largest* viewport and sits
-   under the collapsing URL bar, which clipped the action bar. dvh tracks the
-   visible height. env(safe-area-inset-*) keeps the shell clear of a notch and
-   the home indicator, which viewportFit: cover in layout.tsx lets it reach. */
 .shell {
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -129,24 +45,10 @@ button:disabled {
     max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
 }
 
-.panel {
-  background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
-  border: 1px solid var(--edge);
-  border-radius: 10px;
-  box-shadow: 0 0 22px rgba(74, 217, 240, 0.06) inset;
-}
-
 .panel-title {
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  color: var(--glow);
-  text-transform: uppercase;
   padding: 9px 11px 6px;
-  border-bottom: 1px solid var(--edge-soft);
   margin: 0;
 }
-
-/* ── Top bar ───────────────────────────────────────────────────────────────── */
 
 .topbar {
   grid-area: top;
@@ -160,21 +62,6 @@ button:disabled {
 .brand {
   display: flex;
   flex-direction: column;
-  line-height: 1.1;
-}
-
-.brand-title {
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: 0.19em;
-  color: var(--glow);
-  text-shadow: 0 0 14px rgba(74, 217, 240, 0.5);
-}
-
-.brand-sub {
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  color: var(--text-dim);
 }
 
 .topbar-spacer {
@@ -189,101 +76,40 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
-  color: var(--text-dim);
-  letter-spacing: 0.1em;
   margin-bottom: 4px;
 }
 
 .progress-track {
   height: 9px;
-  background: var(--inset);
-  border: 1px solid var(--edge);
-  border-radius: 5px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #1f8fa8, var(--glow));
-  box-shadow: 0 0 12px rgba(74, 217, 240, 0.65);
   transition: width var(--dur-mid) var(--ease-out);
 }
-
-/* ── Role badge ────────────────────────────────────────────────────────────── */
 
 .role-badge {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 7px 13px;
-  border-radius: 8px;
-  border: 1px solid var(--edge);
-  background: var(--inset);
   min-width: 168px;
-}
-
-.role-badge.parasite {
-  border-color: var(--parasite);
-  background: rgba(124, 255, 79, 0.09);
-  box-shadow: 0 0 18px rgba(124, 255, 79, 0.22);
-}
-
-.role-badge.human {
-  border-color: var(--crew);
-  background: rgba(47, 159, 214, 0.09);
 }
 
 .role-dot {
   width: 9px;
   height: 9px;
-  border-radius: 50%;
-  background: var(--text-dim);
-}
-
-.role-badge.parasite .role-dot {
-  background: var(--parasite);
-  box-shadow: 0 0 10px var(--parasite);
-}
-
-.role-badge.human .role-dot {
-  background: var(--crew);
-  box-shadow: 0 0 10px var(--crew);
 }
 
 .role-text {
   display: flex;
   flex-direction: column;
-  line-height: 1.25;
-}
-
-.role-main {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-.role-mode {
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  color: var(--text-dim);
-}
-
-.role-mode.inco {
-  color: var(--glow);
-}
-
-.role-mode.sim {
-  color: var(--warn);
 }
 
 .role-badge.has-wallet {
   padding-right: 6px;
 }
-
-/* Small secondary control, not a primary action, so it does not chase the
-   44px hit-area floor the in-game action buttons use — but it still gets
-   enough padding to be tappable on a phone without a mis-tap. */
 .role-disconnect {
   margin-left: auto;
   display: flex;
@@ -291,95 +117,27 @@ button:disabled {
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 15px;
-  line-height: 1;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
 }
-
-.role-disconnect:hover,
-.role-disconnect:focus-visible {
-  background: rgba(255, 95, 126, 0.12);
-  border-color: var(--danger-dim);
-  color: var(--danger);
-}
-
-/* ── Buttons ───────────────────────────────────────────────────────────────── */
-
-/* min-height is the 44px hit-area floor: these are the primary in-game controls
-   (Map / Use / Report / Jump / Purge) and were computing to ~33px. Transitions
-   name their properties rather than `all`, so a paint-only hover cannot
-   accidentally animate layout. */
 .btn {
-  background: #16232a;
-  border: 1px solid var(--edge);
-  color: var(--text);
   padding: 11px 16px;
   min-height: var(--hit);
-  border-radius: 7px;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   transition: background-color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out);
 }
 
-.btn:hover:not(:disabled) {
-  background: #1c3540;
-  border-color: var(--glow);
-  box-shadow: 0 0 14px rgba(74, 217, 240, 0.3);
-}
-
-/* Pressed feedback without moving layout bounds. */
-.btn:active:not(:disabled) {
-  background: #21404d;
-}
-
-.btn-danger {
-  background: rgba(255, 95, 126, 0.12);
-  border-color: var(--danger-dim);
-  color: #ffd6de;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: rgba(255, 95, 126, 0.24);
-  border-color: var(--danger);
-  box-shadow: 0 0 16px rgba(255, 95, 126, 0.35);
-}
-
-.btn-parasite {
-  background: rgba(124, 255, 79, 0.13);
-  border-color: #4f9c2f;
-  color: #ddffcc;
-}
-
-.btn-parasite:hover:not(:disabled) {
-  background: rgba(124, 255, 79, 0.26);
-  border-color: var(--parasite);
-  box-shadow: 0 0 18px rgba(124, 255, 79, 0.4);
-}
-
 .btn-lg {
   padding: 14px 26px;
   min-height: 50px;
-  font-size: 13px;
 }
-
-/* ── Stage ─────────────────────────────────────────────────────────────────── */
 
 .stage {
   grid-area: stage;
   position: relative;
   overflow: hidden;
-  border-radius: 10px;
-  border: 1px solid var(--edge);
-  background: #04130f;
 }
 
 .stage canvas {
@@ -387,8 +145,6 @@ button:disabled {
   width: 100% !important;
   height: 100% !important;
 }
-
-/* ── Side panels ───────────────────────────────────────────────────────────── */
 
 .sidebar {
   display: flex;
@@ -415,75 +171,32 @@ button:disabled {
   width: 6px;
 }
 
-.scroll::-webkit-scrollbar-thumb {
-  background: var(--edge);
-  border-radius: 3px;
-}
-
-/* Task list */
-
 .task {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   padding: 8px;
-  border-radius: 6px;
-  border: 1px solid transparent;
   margin-bottom: 4px;
-  font-size: 12px;
-  line-height: 1.4;
+  border: 1px solid transparent;
+  border-radius: 6px;
 }
 
 .task.active {
-  border-color: var(--glow);
-  background: rgba(74, 217, 240, 0.09);
-  box-shadow: 0 0 12px rgba(74, 217, 240, 0.16);
+  background: rgba(233, 188, 130, 0.08);
+  border-color: rgba(233, 188, 130, 0.35);
 }
 
 .task.done {
   opacity: 0.62;
 }
 
-.task-check {
-  color: var(--glow);
-  font-size: 12px;
-  line-height: 1.2;
-}
-
-.task-name {
-  font-weight: 600;
-}
-
-.task.done .task-name {
-  text-decoration: line-through;
-}
-
-.task-where {
-  color: var(--text-dim);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-}
-
-/* Crew list */
-
 .crew {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 5px 7px;
-  border-radius: 7px;
   margin-bottom: 4px;
-  border: 1px solid transparent;
-  font-size: 12px;
 }
-
-.crew.me {
-  border-color: var(--glow);
-  background: rgba(74, 217, 240, 0.08);
-}
-
-/* A dead row still has to be readable — it is the roster you scan during a
-   meeting. Paired with the DEAD tag, so the state is never colour-only. */
 .crew.dead {
   opacity: 0.62;
 }
@@ -491,9 +204,6 @@ button:disabled {
 .crew-avatar {
   width: 34px;
   height: 34px;
-  border-radius: 6px;
-  background: var(--inset);
-  border: 1px solid var(--edge);
   object-fit: contain;
   object-position: top;
   flex-shrink: 0;
@@ -507,29 +217,12 @@ button:disabled {
 .crew-name {
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 600;
-}
-
-.crew-sub {
-  font-size: 10.5px;
-  color: var(--text-dim);
-  letter-spacing: 0.05em;
 }
 
 .crew-tag {
-  font-size: 10px;
   padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--edge);
-  color: var(--text-dim);
   flex-shrink: 0;
 }
-
-/* ── Bottom action bar ─────────────────────────────────────────────────────── */
-
-/* 62px = the 44px hit floor plus the 9px vertical padding on each side, so a
-   full-height button no longer overflows its own bar. */
 .actionbar {
   grid-area: bottom;
   display: flex;
@@ -540,61 +233,32 @@ button:disabled {
   flex-wrap: wrap;
 }
 
-.hint {
-  font-size: 11px;
-  color: var(--text-dim);
-  letter-spacing: 0.08em;
-}
-
-/* ── Minimap ───────────────────────────────────────────────────────────────── */
-
 .minimap {
   position: absolute;
   right: 10px;
   bottom: 10px;
-  border: 1px solid var(--edge);
-  border-radius: 8px;
-  background: rgba(4, 19, 15, 0.86);
   padding: 5px;
-  backdrop-filter: blur(3px);
 }
-
-/* ── Overlays ──────────────────────────────────────────────────────────────── */
 
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 10, 8, 0.86);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 50;
-  backdrop-filter: blur(5px);
 }
 
 .modal {
-  background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
-  border: 1px solid var(--edge);
-  border-radius: 13px;
   padding: 26px;
   max-width: 720px;
   width: min(94vw, 720px);
   max-height: 88vh;
   overflow-y: auto;
-  box-shadow: 0 0 60px rgba(74, 217, 240, 0.13);
 }
 
 .modal h2 {
   margin: 0 0 6px;
-  font-size: 20px;
-  letter-spacing: 0.13em;
-  color: var(--glow);
-}
-
-.modal p {
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.65;
 }
 
 .field {
@@ -603,44 +267,15 @@ button:disabled {
   gap: 5px;
   margin-bottom: 13px;
 }
-
-.field label,
-.field .field-label {
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  color: var(--text-dim);
-  text-transform: uppercase;
-}
-
-/* Helper text sits below its input, not in the placeholder — a placeholder
-   disappears the moment it is needed most. */
 .field-help {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--text-dim);
-  letter-spacing: 0.02em;
   opacity: 0.85;
 }
 
 .field input {
-  background: var(--inset);
-  border: 1px solid var(--edge);
-  border-radius: 7px;
   padding: 12px;
   min-height: var(--hit);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 14px;
-  outline: none;
   transition: border-color var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out);
-}
-
-.field input:focus-visible {
-  border-color: var(--glow);
-  box-shadow: 0 0 12px rgba(74, 217, 240, 0.22);
-  outline: 2px solid var(--glow);
-  outline-offset: 1px;
 }
 
 .skins {
@@ -652,40 +287,18 @@ button:disabled {
 .skin {
   width: 68px;
   height: 84px;
-  border-radius: 8px;
-  border: 2px solid var(--edge);
-  background: var(--inset);
   padding: 3px;
   position: relative;
   transition: border-color var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out);
 }
-
-.skin:hover:not(.sel) {
-  border-color: var(--glow-soft);
-}
-
-.skin.sel {
-  border-color: var(--glow);
-  box-shadow: 0 0 16px rgba(74, 217, 240, 0.36);
-}
-
-/* Selection is marked with a tick as well as the ring, so the chosen scientist
-   is not signalled by colour alone. */
 .skin.sel::after {
-  content: '✔';
   position: absolute;
   top: -7px;
   right: -7px;
   width: 19px;
   height: 19px;
-  border-radius: 50%;
-  background: var(--glow);
-  color: #04130f;
-  font-size: 11px;
-  line-height: 19px;
   text-align: center;
-  font-weight: 700;
 }
 
 .skin img {
@@ -693,8 +306,6 @@ button:disabled {
   height: 100%;
   object-fit: contain;
 }
-
-/* Voting */
 
 .vote-grid {
   display: grid;
@@ -709,35 +320,12 @@ button:disabled {
   gap: 9px;
   padding: 9px;
   min-height: 56px;
-  border-radius: 9px;
-  border: 1px solid var(--edge);
-  background: var(--inset);
   transition: border-color var(--dur-fast) var(--ease-out),
     background-color var(--dur-fast) var(--ease-out);
   text-align: left;
-  color: var(--text);
-  font-size: 12.5px;
 }
-
-/* Scoped to button: the lobby roster reuses this class as a plain list item, and
-   a non-interactive row must not light up under the cursor. */
-button.vote-card:hover:not(:disabled) {
-  border-color: var(--glow);
-  background: rgba(74, 217, 240, 0.1);
-}
-
-.vote-card.voted {
-  border-color: var(--glow);
-  background: rgba(74, 217, 240, 0.16);
-}
-
-/* The cast vote gets a mark, not just a tint — a voted card and a hovered card
-   were otherwise nearly the same colour. */
 .vote-card.voted::after {
-  content: '✔';
   margin-left: auto;
-  color: var(--glow);
-  font-weight: 700;
 }
 
 .vote-card img {
@@ -750,28 +338,13 @@ button.vote-card:hover:not(:disabled) {
 
 .vote-count {
   margin-left: auto;
-  font-size: 15px;
-  color: var(--glow);
-  font-weight: 700;
 }
 
 .timer {
-  font-size: 30px;
-  font-weight: 700;
-  color: var(--glow);
-  letter-spacing: 0.11em;
   text-align: center;
-  text-shadow: 0 0 16px rgba(74, 217, 240, 0.45);
-  /* Digits share a cell so the countdown does not reflow every second. */
-  font-variant-numeric: tabular-nums;
   margin: 6px 0;
 }
-
-/* Under 10 seconds the timer turns amber and pulses. Colour alone would not
-   carry it, so the component also switches to an explicit "Ns left" label. */
 .timer.urgent {
-  color: var(--warn);
-  text-shadow: 0 0 18px rgba(255, 200, 97, 0.5);
   animation: timer-pulse 1s var(--ease-out) infinite;
 }
 
@@ -784,8 +357,6 @@ button.vote-card:hover:not(:disabled) {
     opacity: 0.62;
   }
 }
-
-/* Toasts */
 
 .toasts {
   position: fixed;
@@ -801,32 +372,7 @@ button.vote-card:hover:not(:disabled) {
 
 .toast {
   padding: 9px 15px;
-  border-radius: 7px;
-  font-size: 12.5px;
-  letter-spacing: 0.05em;
-  border: 1px solid var(--edge);
-  background: rgba(10, 35, 27, 0.96);
   animation: toast-in var(--dur-fast) var(--ease-out);
-}
-
-/* Kind is carried by a leading glyph as well as the border colour, so warnings
-   and errors are still distinguishable without colour vision. */
-.toast.warn {
-  border-color: var(--warn);
-  color: var(--warn);
-}
-
-.toast.warn::before {
-  content: '⚠ ';
-}
-
-.toast.error {
-  border-color: var(--danger);
-  color: #ffd6de;
-}
-
-.toast.error::before {
-  content: '✕ ';
 }
 
 @keyframes toast-in {
@@ -840,22 +386,13 @@ button.vote-card:hover:not(:disabled) {
   }
 }
 
-/* Task minigame */
-
 .mg-bar {
   height: 22px;
-  background: var(--inset);
-  border: 1px solid var(--edge);
-  border-radius: 6px;
   overflow: hidden;
   margin: 13px 0;
 }
-
-/* Kept linear and short: this one tracks a held button frame by frame, so it is
-   a direct readout of input rather than a UI transition. */
 .mg-fill {
   height: 100%;
-  background: linear-gradient(90deg, #1f8fa8, var(--glow));
   transition: width 0.1s linear;
 }
 
@@ -869,77 +406,32 @@ button.vote-card:hover:not(:disabled) {
 .mg-cell {
   aspect-ratio: 1;
   min-height: var(--hit);
-  border-radius: 8px;
-  border: 1px solid var(--edge);
-  background: var(--inset);
-  color: var(--text);
-  font-size: 19px;
   transition: border-color var(--dur-fast) var(--ease-out),
     background-color var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .mg-cell.hot {
-  border-color: var(--glow);
-  background: rgba(74, 217, 240, 0.2);
-  box-shadow: 0 0 14px rgba(74, 217, 240, 0.36);
+  color: var(--accent);
+  background: rgba(233, 188, 130, 0.16);
+  border-color: rgba(233, 188, 130, 0.35);
+  box-shadow: 0 0 14px rgba(233, 188, 130, 0.18);
 }
 
 .mg-cell.done {
   opacity: 0.55;
 }
-
-/* 44px tall track so the thumb is grabbable; the input itself is only ~20px. */
 .mg-slider {
   width: 100%;
   height: var(--hit);
   margin: 4px 0;
-  accent-color: #3affc0;
 }
 
 .banner {
   text-align: center;
   padding: 13px;
-  border-radius: 9px;
   margin: 13px 0;
-  font-size: 14px;
-  letter-spacing: 0.11em;
 }
-
-.banner.crew {
-  background: rgba(47, 159, 214, 0.15);
-  border: 1px solid var(--crew);
-  color: #bfe9ff;
-}
-
-.banner.parasite {
-  background: rgba(124, 255, 79, 0.14);
-  border: 1px solid var(--parasite);
-  color: #ddffcc;
-}
-
-/* Win/lose heading. The crew blue is lightened from the #2f9fd6 used for the
-   role badge: as display type on the modal it read at 5.1:1 against the
-   Parasite green's 11.7:1, so the two endings looked lopsided rather than
-   like a matched pair. */
-.end-title.crew {
-  color: var(--crew-bright);
-}
-
-.end-title.parasite {
-  color: var(--parasite);
-}
-
-.muted {
-  color: var(--text-dim);
-  font-size: 12px;
-}
-
-/* ── Role reveal ───────────────────────────────────────────────────────────── */
-/* The unmissable "you are now the Parasite" moment. Deliberately louder than
-   the quiet RoleBadge it sits alongside — full-bleed, high z-index, opaque
-   near-black rather than the translucent/blurred .overlay treatment used for
-   modals, since this needs to read as an intrusion, not a dialog. */
 
 .role-reveal {
   position: fixed;
@@ -949,7 +441,6 @@ button.vote-card:hover:not(:disabled) {
   align-items: center;
   justify-content: center;
   text-align: center;
-  background: radial-gradient(ellipse at center, rgba(20, 6, 4, 0.97) 0%, rgba(2, 1, 1, 0.99) 75%);
   cursor: pointer;
   animation: role-reveal-in var(--dur-mid) var(--ease-out);
 }
@@ -961,13 +452,6 @@ button.vote-card:hover:not(:disabled) {
 .role-reveal-noise {
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(124, 255, 79, 0.05) 0px,
-    rgba(124, 255, 79, 0.05) 1px,
-    transparent 1px,
-    transparent 3px
-  );
   animation: role-reveal-flicker 2.4s steps(12) infinite;
 }
 
@@ -979,29 +463,16 @@ button.vote-card:hover:not(:disabled) {
 
 .role-reveal-eyebrow {
   display: block;
-  font-size: 12px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--danger);
   margin-bottom: 14px;
 }
 
 .role-reveal-title {
   margin: 0 0 16px;
-  font-size: clamp(32px, 8vw, 64px);
-  letter-spacing: 0.06em;
-  color: var(--parasite);
-  text-shadow:
-    0 0 18px rgba(124, 255, 79, 0.65),
-    0 0 46px rgba(124, 255, 79, 0.35);
   animation: role-reveal-shake 320ms var(--ease-out) 1;
 }
 
 .role-reveal-sub {
   margin: 0;
-  color: var(--text-dim);
-  font-size: 14px;
-  line-height: 1.6;
 }
 
 @keyframes role-reveal-in {
@@ -1063,19 +534,8 @@ button.vote-card:hover:not(:disabled) {
 }
 
 .mono-note {
-  font-size: 11.5px;
-  color: var(--text-dim);
-  line-height: 1.6;
-  background: var(--inset);
-  border: 1px solid var(--edge);
-  border-radius: 7px;
   padding: 10px 12px;
   margin-top: 11px;
-}
-
-.mono-note code {
-  color: var(--glow-soft);
-  word-break: break-all;
 }
 
 .row {
@@ -1086,26 +546,9 @@ button.vote-card:hover:not(:disabled) {
 }
 
 .pill {
-  font-size: 10px;
-  letter-spacing: 0.11em;
   padding: 4px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--edge);
-  color: var(--text-dim);
   white-space: nowrap;
 }
-
-.pill.ok {
-  border-color: var(--glow);
-  color: var(--glow);
-}
-
-.pill.bad {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-/* Utility for text that must exist for a screen reader but not be drawn. */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1115,7 +558,6 @@ button.vote-card:hover:not(:disabled) {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
-  border: 0;
 }
 
 @media (max-width: 1080px) {
@@ -1123,10 +565,6 @@ button.vote-card:hover:not(:disabled) {
     grid-template-columns: 190px 1fr 200px;
   }
 }
-
-/* Below 820px the three-column shell cannot hold two 190px rails and a usable
-   stage, so the rails drop under the canvas and scroll with the page. The stage
-   keeps a minimum height so the game never collapses to a sliver. */
 @media (max-width: 820px) {
   html,
   body {
@@ -1161,34 +599,15 @@ button.vote-card:hover:not(:disabled) {
   }
 
   .progress-wrap {
-    order: 3;
     flex: 1 1 100%;
   }
 }
-
-/* ── Title screen ──────────────────────────────────────────────────────────── */
-
-/*
- * Full-bleed menu, laid out after the reference the owner supplied: scene
- * behind everything, status chip and icon button pinned to the top corners, a
- * centred logo/CTA column, and a status card lower-right. The centre column is
- * the only thing with a hard vertical rhythm; the corners are absolutely
- * positioned so they never push it around.
- */
 .menu {
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: var(--bg-deep);
-  /* Same layer as .overlay. Without this the title screen sat *under* the game
-     shell's HUD panels (z-index 2) and the task list and action buttons showed
-     straight through it. */
   z-index: 50;
 }
-
-/* The backdrop is a fixed 1600x900 painting. `cover` keeps its composition —
-   crew low-left, Parasite right — intact at any aspect ratio instead of
-   letterboxing the scene the layout was composed against. */
 .menu-canvas {
   position: absolute;
   inset: 0;
@@ -1197,16 +616,9 @@ button.vote-card:hover:not(:disabled) {
   object-fit: cover;
   display: block;
 }
-
-/* Readability plate. The logo and buttons sit on a painted scene, and type on
-   an unmanaged photograph is the classic way a menu ends up illegible on
-   exactly one machine. */
 .menu-scrim {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse 46% 62% at 50% 46%, rgba(4, 8, 12, 0.82), rgba(4, 8, 12, 0.12) 70%),
-    linear-gradient(180deg, rgba(4, 8, 12, 0.62) 0%, rgba(4, 8, 12, 0) 26%);
   pointer-events: none;
 }
 
@@ -1218,24 +630,33 @@ button.vote-card:hover:not(:disabled) {
   align-items: center;
   gap: 9px;
   padding: 9px 14px;
-  border-radius: 999px;
-  background: rgba(10, 14, 19, 0.72);
-  border: 1px solid var(--edge);
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  color: var(--text-dim);
 }
 
 .menu-status .dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  background: var(--warn);
 }
 
-.menu-status .dot.live {
-  background: var(--glow);
-  box-shadow: 0 0 10px var(--glow);
+.connection-skeleton {
+  width: 32px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(245, 245, 243, 0.08);
+  position: relative;
+}
+
+.connection-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(245, 245, 243, 0.5), transparent);
+  animation: connection-shimmer 1.2s var(--ease-out) infinite;
+}
+
+@keyframes connection-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
 }
 
 .menu-icon-btn {
@@ -1244,20 +665,8 @@ button.vote-card:hover:not(:disabled) {
   right: max(18px, env(safe-area-inset-right));
   width: var(--hit);
   height: var(--hit);
-  border-radius: 50%;
-  background: rgba(10, 14, 19, 0.72);
-  border: 1px solid var(--edge);
-  color: var(--text);
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1;
   transition: border-color var(--dur-fast) var(--ease-out),
     background-color var(--dur-fast) var(--ease-out);
-}
-
-.menu-icon-btn:hover {
-  border-color: var(--glow);
-  background: rgba(20, 32, 40, 0.9);
 }
 
 .menu-stack {
@@ -1271,98 +680,27 @@ button.vote-card:hover:not(:disabled) {
   padding: 0 20px;
   text-align: center;
 }
-
-/* ── Logo ──────────────────────────────────────────────────────────────────── */
-
-/*
- * A stacked three-line lockup. The reference's is hand-lettered art; this is
- * type, because type is what code can actually do well — the weight, the tight
- * tracking and the heavy outline do the work a drawn logo would.
- */
 .logo {
   margin: 0 0 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  line-height: 0.84;
-  font-family: var(--font-display), ui-monospace, monospace;
-  font-weight: 700;
-  text-transform: uppercase;
   user-select: none;
-}
-
-.logo-sm {
-  font-size: clamp(26px, 5.2vw, 58px);
-  letter-spacing: 0.3em;
-  /* Indent by the tracking so the optical centre matches the big line. */
-  text-indent: 0.3em;
-  color: var(--text);
-  text-shadow: 0 3px 0 rgba(3, 8, 11, 0.9), 0 0 26px rgba(74, 217, 240, 0.28);
-}
-
-.logo-sm.alt {
-  color: var(--glow);
-}
-
-.logo-lg {
-  font-size: clamp(52px, 13vw, 152px);
-  letter-spacing: 0.04em;
-  text-indent: 0.04em;
-  color: var(--text);
-  /* Stacked hard shadows instead of a stroke: -webkit-text-stroke thins the
-     glyph from the inside, which eats a heavy weight's whole point. */
-  text-shadow:
-    0 6px 0 rgba(3, 8, 11, 0.95),
-    0 0 44px rgba(74, 217, 240, 0.4),
-    0 0 90px rgba(124, 255, 79, 0.16);
 }
 
 .tagline {
   margin: 0 0 26px;
-  font-size: clamp(11px, 1.5vw, 14px);
-  letter-spacing: 0.14em;
-  color: var(--text-dim);
 }
-
-/* ── Primary / secondary actions ───────────────────────────────────────────── */
-
-/*
- * One dominant action, everything else visibly quieter — the single most
- * useful thing about the reference's menu. Press deformation rather than a
- * colour swap: it reads as physical, and it survives being looked at on a
- * phone where hover does not exist.
- */
 .btn-play {
   min-width: min(340px, 78vw);
   min-height: 62px;
   padding: 16px 44px;
-  border: none;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #ffd25e 0%, #f2a52b 100%);
-  color: #241703;
-  font-family: var(--font-display), ui-monospace, monospace;
-  font-size: clamp(20px, 3vw, 28px);
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   transition: transform var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
 }
 
-.btn-play:hover:not(:disabled) {
-  filter: brightness(1.07);
-}
-
 .btn-play:active:not(:disabled) {
   transform: translateY(2px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
-}
-
-.btn-play:disabled {
-  background: #4d545a;
-  color: #d5dde2;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .menu-secondary {
@@ -1376,68 +714,29 @@ button.vote-card:hover:not(:disabled) {
 .btn-menu {
   min-height: var(--hit);
   padding: 12px 26px;
-  border-radius: 11px;
-  border: 1px solid var(--edge);
-  background: rgba(18, 26, 33, 0.86);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
   transition: transform var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 
-.btn-menu:hover {
-  border-color: var(--glow);
-}
-
 .btn-menu:active {
   transform: translateY(2px);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
 }
-
-/* ── Mode card ─────────────────────────────────────────────────────────────── */
 
 .mode-card {
   position: absolute;
   right: max(18px, env(safe-area-inset-right));
   bottom: max(18px, env(safe-area-inset-bottom));
   width: min(310px, 68vw);
-  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid var(--danger-dim);
-  background: rgba(10, 14, 19, 0.9);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-.mode-card.inco {
-  border-color: var(--edge);
 }
 
 .mode-card > header {
   padding: 8px 13px;
-  background: var(--danger-dim);
-  color: #1b0208;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-}
-
-.mode-card.inco > header {
-  background: var(--glow);
-  color: #04171d;
 }
 
 .mode-body {
   padding: 11px 13px;
-  font-size: 11.5px;
-  line-height: 1.55;
-  color: var(--text-dim);
 }
-
-/* ── Waiting room ──────────────────────────────────────────────────────────── */
 
 .waitroom {
   position: relative;
@@ -1453,19 +752,12 @@ button.vote-card:hover:not(:disabled) {
 
 .waitroom-title {
   margin: 0;
-  font-family: var(--font-display), ui-monospace, monospace;
-  font-size: clamp(26px, 5vw, 44px);
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--text);
-  text-shadow: 0 4px 0 rgba(3, 8, 11, 0.9), 0 0 34px rgba(74, 217, 240, 0.3);
 }
 
 .waitroom-head {
   display: flex;
   align-items: center;
   gap: 14px;
-  letter-spacing: 0.1em;
 }
 
 .crew-strip {
@@ -1484,22 +776,13 @@ button.vote-card:hover:not(:disabled) {
   align-items: center;
   gap: 8px;
   padding: 7px 13px 7px 8px;
-  border-radius: 10px;
-  border: 1px solid var(--edge);
-  background: rgba(18, 26, 33, 0.88);
-  font-size: 12px;
 }
 
 .crew-chip img {
   width: 26px;
   height: 30px;
   object-fit: contain;
-  image-rendering: pixelated;
 }
-
-/* ── Sheets ────────────────────────────────────────────────────────────────── */
-
-/* A sheet is the existing .modal, narrowed and scroll-safe on short screens. */
 .sheet {
   max-width: 470px;
   max-height: min(86vh, 760px);
@@ -1509,46 +792,16 @@ button.vote-card:hover:not(:disabled) {
 .how-list {
   margin: 6px 0 4px;
   padding-left: 20px;
-  line-height: 1.65;
-  font-size: 13px;
-  color: var(--text-dim);
 }
 
 .how-list li + li {
   margin-top: 9px;
 }
-
-.how-list strong {
-  color: var(--text);
-}
-
-/* Short viewports: the logo is the first thing that should give up space. */
 @media (max-height: 620px) {
-  .logo-lg {
-    font-size: clamp(40px, 9vw, 72px);
-  }
-  .logo-sm {
-    font-size: clamp(18px, 3.4vw, 28px);
-  }
   .tagline {
     margin-bottom: 16px;
   }
 }
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   HUD v2 — the corner ring
-   ═══════════════════════════════════════════════════════════════════════════
-
-   Everything below overrides the original three-column shell. See DESIGN.md §1:
-   the reference puts UI only around the edges and gives the whole middle to the
-   world, where our first layout spent ~40% of a 1280px screen on two permanent
-   rails and left the game playing in a slot between them.
-
-   Deliberately written as an override block rather than by editing the original
-   rules: the panels keep their existing markup, roles, labels and live regions
-   (a real accessibility pass went into those), and only their placement and
-   surface change. Nothing here touches a single component's DOM.
-   ════════════════════════════════════════════════════════════════════════════ */
 
 .shell {
   display: block;
@@ -1556,38 +809,18 @@ button.vote-card:hover:not(:disabled) {
   padding: 0;
   gap: 0;
 }
-
-/* The world, full bleed. Rounded corners and the border go away — it is the
-   page now, not a widget on it. */
 .shell > .stage {
   position: absolute;
   inset: 0;
-  border: none;
-  border-radius: 0;
   z-index: 0;
 }
-
-/* Shared surface for everything floating over the world. */
 .shell > .topbar,
 .shell > .sidebar-left,
 .shell > .sidebar-right,
 .shell > .actionbar {
   position: absolute;
   z-index: 2;
-  /* Opaque and heavily outlined, not translucent glass with a hairline. Frosted
-     panels over a busy canvas are the default "AI dashboard" surface and they
-     read as unfinished; the reference uses solid plates with thick dark borders
-     and a light inner bevel, which is what makes a panel look built. */
-  /* Flat. The chunky border + inner bevel + hard drop edge read as a fake 3D
-     plastic panel; a single hairline and a soft shadow is enough to lift a
-     surface off the canvas without pretending it is an object. */
-  background: rgba(19, 26, 32, 0.94);
-  border: 1px solid rgba(122, 168, 184, 0.22);
-  border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
-
-/* ── Top bar: brand + progress only, hugging the top-left ─────────────────── */
 .shell > .topbar {
   top: max(10px, env(safe-area-inset-top));
   left: max(10px, env(safe-area-inset-left));
@@ -1598,137 +831,67 @@ button.vote-card:hover:not(:disabled) {
   max-width: min(520px, calc(100vw - 220px));
   flex-wrap: nowrap;
 }
-
-/* The sub-line wrapped to three stacked words at this width, which is what
-   pushed the bar down into the task panel below it. */
 .shell > .topbar .brand,
 .shell > .topbar .brand-title,
 .shell > .topbar .brand-sub {
   white-space: nowrap;
 }
-
-/* The spacer only existed to push things apart across a full-width bar. */
 .shell > .topbar .topbar-spacer {
   display: none;
-}
-
-.shell > .topbar .brand-title {
-  font-size: 15px;
-}
-
-.shell > .topbar .brand-sub {
-  font-size: 8.5px;
 }
 
 .shell > .topbar .progress-wrap {
   min-width: 140px;
 }
-
-/* ── Task list: top-left, under the bar, height-capped ────────────────────── */
 .shell > .sidebar-left {
   top: calc(max(10px, env(safe-area-inset-top)) + 84px);
   left: max(10px, env(safe-area-inset-left));
   width: 216px;
   max-height: min(46vh, 380px);
 }
-
-/* ── Crew list: top-right, clear of the minimap ───────────────────────────── */
 .shell > .sidebar-right {
   top: calc(max(10px, env(safe-area-inset-top)) + 172px);
   right: max(10px, env(safe-area-inset-right));
   width: 210px;
   max-height: min(42vh, 340px);
 }
-
-/* ── Action bar: bottom, no plate of its own ──────────────────────────────── */
-/* The buttons are the UI now; a bar behind them is a second surface doing no
-   work. Only the buttons keep a background. */
 .shell > .actionbar {
   left: 50%;
   transform: translateX(-50%);
   bottom: max(12px, env(safe-area-inset-bottom));
-  background: none;
-  backdrop-filter: none;
-  border: none;
-  box-shadow: none;
   min-height: 0;
   padding: 0;
   gap: 14px;
   justify-content: center;
 }
-
-/* ── Circular ability buttons ─────────────────────────────────────────────── */
-/*
- * DESIGN.md §2/§3: circles are the reference's signature shape, and each one
- * carries its own keybind on a tab beneath it so the controls teach themselves
- * — which is what lets the separate "WASD / arrows to move" hint go away.
- */
 .shell > .actionbar .btn {
   width: 66px;
   height: 66px;
   min-height: 66px;
   padding: 0;
-  border-radius: 50%;
-  background: rgba(24, 34, 41, 0.94);
-  border: 1px solid rgba(122, 168, 184, 0.3);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1px;
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  line-height: 1.1;
   position: relative;
   overflow: visible;
 }
-
-.shell > .actionbar .btn .ico {
-  font-size: 21px;
-  line-height: 1;
-}
-
-/* The keybind tab. Absolutely positioned so it cannot change the circle's
-   box, which is what keeps the row's rhythm even. */
 .shell > .actionbar .btn .key {
   position: absolute;
   bottom: -9px;
   left: 50%;
   transform: translateX(-50%);
   padding: 1px 7px;
-  border-radius: 4px;
-  background: var(--bg-panel-2);
-  border: 1px solid var(--edge-soft);
-  font-size: 8px;
-  letter-spacing: 0.1em;
-  color: var(--text-dim);
   white-space: nowrap;
-}
-
-.shell > .actionbar .btn:hover:not(:disabled) {
-  border-color: var(--glow);
-  background: rgba(28, 53, 64, 0.95);
 }
 
 .shell > .actionbar .btn:active:not(:disabled) {
   transform: translateY(3px);
 }
-
-.shell > .actionbar .btn-danger {
-  border-color: var(--danger-dim);
-}
-
-.shell > .actionbar .btn-parasite {
-  border-color: #4f9c2f;
-}
-
-/* The old inline hint is redundant once every control is self-labelling. */
 .shell > .actionbar .hint {
   display: none;
 }
-
-/* ── Circular minimap, top-right ──────────────────────────────────────────── */
 .minimap {
   top: max(10px, env(safe-area-inset-top));
   right: max(10px, env(safe-area-inset-right));
@@ -1736,56 +899,29 @@ button.vote-card:hover:not(:disabled) {
   width: 132px;
   height: 132px;
   padding: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(122, 168, 184, 0.3);
-  background: rgba(14, 20, 26, 0.94);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-  /* Not `hidden`: the room caption below is a ::after positioned at top:100%,
-     and clipping to the dial swallowed it entirely. The canvas is sized to fit
-     inside the circle instead, so there is nothing to clip. */
   overflow: visible;
   display: grid;
   place-items: center;
   z-index: 3;
 }
-
-/* The canvas is authored at a fixed 168px wide, which overflowed the dial and
-   showed as a bright clipped bar. Fit it instead of cropping it. */
 .minimap canvas {
   max-width: 84%;
   max-height: 84%;
   width: auto;
   height: auto;
-  border-radius: 6px;
 }
-
-/* Room name under the dial, as in the reference. */
 .minimap::after {
-  content: attr(data-room);
   position: absolute;
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
   margin-top: 6px;
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
-  color: var(--text-dim);
-  text-shadow: 0 1px 3px #000;
-  /* Room names run long ("Central Meeting Platform"), and unconstrained the
-     caption grew past the dial and collided with the crew panel beside it. */
   max-width: 150px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   text-align: center;
   padding: 2px 7px;
-  border-radius: 5px;
-  background: rgba(10, 14, 19, 0.82);
 }
-
-/* ── Narrow screens ───────────────────────────────────────────────────────── */
-/* The ring still holds; the panels just shrink and the crew list steps aside,
-   since on a phone the roster matters less than seeing the room. */
 @media (max-width: 880px) {
   .shell > .topbar {
     max-width: calc(100vw - 170px);
@@ -1807,14 +943,6 @@ button.vote-card:hover:not(:disabled) {
     min-height: 58px;
   }
 }
-
-/* ── The loud moment ───────────────────────────────────────────────────────── */
-/*
- * DESIGN.md §8. A body turning up is the hinge the round swings on and it was
- * getting the same 4-second corner toast as "Task faked." This is the whole
- * screen for 2.6s, then gone. pointer-events: none throughout — it announces,
- * it never blocks the meeting overlay arriving underneath it.
- */
 .alert-banner {
   position: fixed;
   inset: 0;
@@ -1834,30 +962,6 @@ button.vote-card:hover:not(:disabled) {
   animation: alert-streak 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.alert-banner.danger .alert-streak {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 60, 92, 0) 0%,
-    rgba(255, 60, 92, 0.5) 18%,
-    rgba(255, 95, 126, 0.95) 50%,
-    rgba(255, 60, 92, 0.5) 82%,
-    rgba(255, 60, 92, 0) 100%
-  );
-  box-shadow: 0 0 90px rgba(255, 60, 92, 0.6);
-}
-
-.alert-banner.warn .alert-streak {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 200, 97, 0) 0%,
-    rgba(255, 200, 97, 0.5) 18%,
-    rgba(255, 214, 130, 0.95) 50%,
-    rgba(255, 200, 97, 0.5) 82%,
-    rgba(255, 200, 97, 0) 100%
-  );
-  box-shadow: 0 0 90px rgba(255, 200, 97, 0.55);
-}
-
 .alert-inner {
   position: relative;
   display: flex;
@@ -1865,28 +969,6 @@ button.vote-card:hover:not(:disabled) {
   align-items: center;
   gap: 8px;
   animation: alert-pop 2.6s var(--ease-out) forwards;
-}
-
-.alert-title {
-  font-family: var(--font-display), ui-monospace, monospace;
-  font-size: clamp(34px, 7.2vw, 84px);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #fff;
-  text-transform: uppercase;
-  /* Stacked hard shadows rather than -webkit-text-stroke, which thins a heavy
-     weight from the inside. */
-  text-shadow:
-    0 5px 0 rgba(6, 3, 5, 0.92),
-    0 0 34px rgba(0, 0, 0, 0.65);
-}
-
-.alert-sub {
-  font-size: clamp(11px, 1.7vw, 15px);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: #fff;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
 }
 
 @keyframes alert-streak {
@@ -1907,9 +989,6 @@ button.vote-card:hover:not(:disabled) {
   0%, 92% { opacity: 1; }
   100% { opacity: 0; }
 }
-
-/* A 2.6-second full-screen sweep is exactly what this preference is for. The
-   announcement still happens — role="alert" carries it — it just holds still. */
 @media (prefers-reduced-motion: reduce) {
   .alert-streak,
   .alert-inner,
@@ -1923,65 +1002,27 @@ button.vote-card:hover:not(:disabled) {
   }
 }
 
-/* ── Meeting screen ────────────────────────────────────────────────────────── */
-/* DESIGN.md §9: accent-bordered panel, time draining as a bar, dead players
-   greyed in place rather than dropped from the grid. */
-
-.overlay .modal:has(#meeting-heading) {
-  border: 2px solid var(--danger-dim);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 24px 60px rgba(0, 0, 0, 0.6);
-}
-
 .meet-timerbar {
   height: 10px;
-  border-radius: 5px;
-  background: var(--inset);
-  border: 1px solid var(--edge);
   overflow: hidden;
   margin: 10px 0 8px;
 }
 
 .meet-timerfill {
   height: 100%;
-  background: linear-gradient(90deg, #1f8fa8, var(--glow));
-  /* Linear, not eased: this is a direct readout of remaining time, and an
-     easing curve here would misreport how much is actually left. */
   transition: width 0.25s linear;
-}
-
-.meet-timerfill.urgent {
-  background: linear-gradient(90deg, #c9506a, var(--danger));
 }
 
 .vote-card.dead {
   opacity: 0.42;
-  filter: grayscale(0.85);
   cursor: default;
   position: relative;
 }
 
-.vote-card.dead img {
-  /* The X is drawn rather than added as an asset — two gradients, no request. */
-  background:
-    linear-gradient(45deg, transparent 46%, var(--danger) 46%, var(--danger) 54%, transparent 54%),
-    linear-gradient(-45deg, transparent 46%, var(--danger) 46%, var(--danger) 54%, transparent 54%);
-}
-
 .dead-tag {
   margin-left: auto;
-  font-size: 8.5px;
-  letter-spacing: 0.16em;
-  color: var(--danger);
-  border: 1px solid var(--danger-dim);
-  border-radius: 4px;
   padding: 1px 5px;
 }
-
-/* Phone widths. At 430px the top bar's brand + progress + role badge cannot
-   coexist on one row — it ran off the right edge — and the minimap caption
-   overflowed the viewport. Progress drops out (it is repeated in the task
-   panel), the brand loses its sub-line, and the caption is allowed to wrap
-   into the dial's own width. */
 @media (max-width: 560px) {
   .shell > .topbar {
     max-width: calc(100vw - 128px);
@@ -1994,9 +1035,6 @@ button.vote-card:hover:not(:disabled) {
   .shell > .topbar .brand-sub {
     display: none;
   }
-  .shell > .topbar .brand-title {
-    font-size: 13px;
-  }
   .role-badge {
     min-width: 0;
     padding: 5px 9px;
@@ -2004,12 +1042,9 @@ button.vote-card:hover:not(:disabled) {
   .minimap {
     width: 92px;
     height: 92px;
-    border-width: 3px;
   }
   .minimap::after {
     max-width: 108px;
-    font-size: 8.5px;
-    letter-spacing: 0.06em;
   }
   .shell > .sidebar-left {
     width: 158px;
@@ -2022,8 +1057,6 @@ button.vote-card:hover:not(:disabled) {
     flex-wrap: wrap;
   }
 }
-
-/* ── Art gallery (/gallery) ────────────────────────────────────────────────── */
 .gal {
   height: 100dvh;
   overflow-y: auto;
@@ -2033,25 +1066,15 @@ button.vote-card:hover:not(:disabled) {
 }
 
 .gal h1 {
-  font-size: 26px;
-  letter-spacing: 0.08em;
   margin: 0 0 6px;
 }
 
 .gal h2 {
-  font-size: 15px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--glow);
   margin: 30px 0 4px;
-  border-bottom: 1px solid var(--edge-soft);
   padding-bottom: 6px;
 }
 
 .gal-note {
-  color: var(--text-dim);
-  font-size: 12.5px;
-  line-height: 1.6;
   margin: 4px 0 12px;
   max-width: 70ch;
 }
@@ -2065,58 +1088,20 @@ button.vote-card:hover:not(:disabled) {
 .gal-fig {
   margin: 0;
   padding: 6px 6px 4px;
-  border: 1px solid rgba(122, 168, 184, 0.2);
-  border-radius: 10px;
-  background: #131a20;
   text-align: center;
 }
 
 .gal-fig figcaption {
-  font-size: 9.5px;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
   margin-top: 3px;
 }
-
-/* Role badge as a call to action. In Inco mode with no wallet there is
-   genuinely nothing to display — the role is a ciphertext only the player's
-   wallet can open — so the badge asks for one instead of sitting on a
-   placeholder that reads as a broken game. */
 button.role-badge.needs-wallet {
   cursor: pointer;
-  border-color: var(--warn);
-  background: rgba(255, 200, 97, 0.1);
   text-align: left;
-  font-family: inherit;
-}
-
-button.role-badge.needs-wallet:hover {
-  background: rgba(255, 200, 97, 0.18);
-}
-
-button.role-badge.needs-wallet .role-dot {
-  background: var(--warn);
-  box-shadow: 0 0 10px var(--warn);
-}
-
-button.role-badge.needs-wallet .role-main {
-  color: var(--warn);
-  font-size: 11.5px;
-}
-
-/* Bots are labelled, not disguised. A lobby that pads itself to a playable
-   size and does not say so is misrepresenting who you are deducing against. */
-.crew-tag.bot {
-  color: var(--text-dim);
-  border-color: var(--edge-soft);
 }
 
 .crew-chip.bot {
   opacity: 0.78;
-  border-style: dashed;
 }
-
-/* ── Room chat ─────────────────────────────────────────────────────────────── */
 
 .chat {
   display: flex;
@@ -2124,8 +1109,6 @@ button.role-badge.needs-wallet .role-main {
   gap: 7px;
   margin-top: 12px;
   width: 100%;
-  /* The waiting room is a centred column with no width of its own, so an
-     unconstrained chat stretched edge to edge across the title art. */
   max-width: 520px;
   margin-left: auto;
   margin-right: auto;
@@ -2135,42 +1118,15 @@ button.role-badge.needs-wallet .role-main {
   height: 132px;
   overflow-y: auto;
   padding: 8px 10px;
-  border: 1px solid var(--edge-soft);
-  border-radius: 9px;
-  background: var(--inset);
   text-align: left;
 }
 
 .chat-empty {
   margin: 0;
-  font-size: 11.5px;
-  color: var(--text-dim);
 }
 
 .chat-line {
   margin: 0 0 5px;
-  font-size: 12.5px;
-  line-height: 1.45;
-  word-break: break-word;
-}
-
-.chat-who {
-  color: var(--glow);
-  font-weight: 600;
-}
-
-.chat-line.mine .chat-who {
-  color: var(--crew-bright);
-}
-
-/* The dead read their own channel; the living are never sent these at all. */
-.chat-line.ghost .chat-who {
-  color: var(--text-dim);
-}
-
-.chat-line.ghost .chat-text {
-  color: var(--text-dim);
-  font-style: italic;
 }
 
 .chat-input {
@@ -2185,10 +1141,7 @@ button.role-badge.needs-wallet .role-main {
 
 .chat-input .btn-menu {
   padding: 10px 16px;
-  font-size: 11px;
 }
-
-/* ── Voice ─────────────────────────────────────────────────────────────────── */
 
 .voice-bar {
   display: flex;
@@ -2197,56 +1150,255 @@ button.role-badge.needs-wallet .role-main {
   flex-wrap: wrap;
   margin-top: 12px;
   padding: 9px 11px;
-  border: 1px solid var(--edge-soft);
-  border-radius: 9px;
-  background: var(--inset);
-}
-
-.voice-note {
-  font-size: 11px;
-  color: var(--text-dim);
-  letter-spacing: 0.04em;
 }
 
 .btn-menu.ptt {
   min-width: 150px;
 }
 
-/* Talking is the one state that has to be unmistakable at a glance, because
-   the alternative is a player who does not realise they are broadcasting. */
-.btn-menu.ptt.live {
-  border-color: var(--danger);
-  background: rgba(255, 95, 126, 0.2);
-  color: #ffd6de;
-}
-
 .btn-menu.quiet {
   padding: 8px 12px;
-  font-size: 10px;
   opacity: 0.75;
 }
-
-/* three.js stage overlay: name plates and the touch stick (DOM, not WebGL) */
 .stage-tags { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .stage-tag {
   position: absolute; left: 0; top: 0; white-space: nowrap;
-  padding: 3px 8px; border-radius: 999px;
-  font: 500 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.02em;
-  color: #f5f5f3; background: rgba(7, 12, 14, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-  will-change: transform;
+  padding: 3px 8px;
 }
-.stage-tag.me { color: #1a1206; background: rgba(255, 214, 160, 0.92); border-color: rgba(255, 226, 184, 0.6); font-weight: 600; }
 .stage-tag.away { opacity: 0.55; }
 .stage-stick {
-  position: absolute; left: 0; top: 0; width: 108px; height: 108px; border-radius: 999px;
-  background: rgba(7, 12, 14, 0.45); border: 1px solid rgba(255, 255, 255, 0.12);
+  position: absolute; left: 0; top: 0; width: 108px; height: 108px;
   pointer-events: none; opacity: 0; transition: opacity 0.12s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .stage-stick.on { opacity: 1; }
 .stage-stick-knob {
-  position: absolute; left: 32px; top: 32px; width: 44px; height: 44px; border-radius: 999px;
-  background: rgba(245, 245, 243, 0.85); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  position: absolute; left: 32px; top: 32px; width: 44px; height: 44px;
 }
 @media (prefers-reduced-motion: reduce) { .stage-stick { transition: none; } }
+
+/* Shared visual foundation. Layout remains the existing, tested game layout. */
+@font-face { font-family: 'Inter'; src: url('/v2/fonts/inter-400.woff') format('woff'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('/v2/fonts/inter-600.woff') format('woff'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('/v2/fonts/inter-700.woff') format('woff'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('/v2/fonts/inter-800.woff') format('woff'); font-weight: 800; font-display: swap; }
+:root {
+  color-scheme: dark;
+  --bg: #091216; --bg-1: #111f23; --bg-2: #17272b; --bg-3: #1c3137;
+  --ink: #f5f5f3; --ink-2: #c9d0ce; --muted: #91a39f; --accent: #e9bc82;
+  --line: rgba(245,245,243,.10); --line-strong: rgba(245,245,243,.20);
+  --danger: #ef8390; --infection: #b7e777;
+  --sans: 'Inter', Arial, sans-serif; --mono: 'DejaVu Sans Mono', ui-monospace, monospace;
+  --font-display: var(--sans); --text: var(--ink); --dim: var(--muted);
+  --panel: var(--bg-1); --panel2: var(--bg-2); --edge: var(--line);
+  --cyan: var(--accent); --human: var(--accent); --parasite: var(--infection); --warn: var(--accent);
+  --inset: var(--bg); --hit: 44px; --r-pill: 999px;
+  --dur-fast: 150ms; --dur-mid: 200ms;
+  --ease-out: cubic-bezier(.22,1,.36,1);
+}
+html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button, a, input, textarea { -webkit-tap-highlight-color: transparent; }
+button { border: 1px solid var(--line); background: var(--bg-2); border-radius: 8px; }
+a { color: var(--ink-2); text-underline-offset: 4px; }
+a:hover { color: var(--ink); }
+h1, h2, h3, p { margin-top: 0; }
+h1, h2, h3, strong { font-weight: 700; }
+h1, h2 { letter-spacing: -.035em; }
+p { color: var(--ink-2); line-height: 1.6; }
+code, .mono { font-family: var(--mono); }
+::selection { background: rgba(233,188,130,.25); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+button:disabled { opacity: .48; }
+input, select, textarea { background: var(--bg); border: 1px solid var(--line-strong); border-radius: 8px; padding: 11px 12px; min-height: 44px; }
+input::placeholder, textarea::placeholder { color: var(--muted); }
+button { transition: background-color 150ms var(--ease-out), border-color 150ms var(--ease-out), transform 120ms var(--ease-out); }
+button:active:not(:disabled) { transform: translateY(1px); }
+.panel, .modal, .sheet, .mode-card, .waitroom { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 64px rgba(0,0,0,.35); }
+.btn { min-height: 44px; padding: 11px 16px; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--bg-2); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: none; }
+.btn:hover:not(:disabled) { background: var(--bg-3); border-color: rgba(245,245,243,.30); }
+.btn-lg { padding: 14px 22px; font-size: 15px; }
+.btn.danger, .banner.parasite { background: rgba(239,131,144,.10); color: var(--danger); border-color: rgba(239,131,144,.25); }
+.pill, .tag { font-family: var(--mono); font-size: 10px; font-weight: 400; letter-spacing: .02em; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); background: rgba(245,245,243,.04); padding: 3px 7px; }
+.pill.ok { color: var(--accent); background: rgba(233,188,130,.09); }
+.panel-title { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.field label, .field-label { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.field-help, .hint, .mono-note { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.mono-note { font-family: var(--mono); padding: 12px; background: rgba(245,245,243,.035); border: 1px solid var(--line); border-radius: 8px; }
+.banner { padding: 12px 16px; background: rgba(233,188,130,.08); border: 1px solid var(--line); border-radius: 8px; }
+.error-toast, .error { color: var(--danger); background: var(--bg-1); border: 1px solid rgba(239,131,144,.30); border-radius: 8px; font-size: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.35); }
+
+/* Title screen keeps the supplied reference's layout grammar, not its artwork. */
+.menu { background: var(--bg); }
+.menu-canvas { object-fit: cover; object-position: 60% 45%; }
+.menu-scrim { background: linear-gradient(90deg,rgba(9,18,22,.88) 0%,rgba(9,18,22,.46) 43%,rgba(9,18,22,.10) 74%), linear-gradient(0deg,rgba(9,18,22,.85),transparent 36%); }
+.menu-status { font-family: var(--mono); font-size: 11px; color: var(--ink-2); background: rgba(9,18,22,.72); border: 1px solid var(--line); border-radius: 6px; }
+.menu-status .dot { background: var(--accent); border-radius: 50%; box-shadow: none; }
+.menu-status .dot.offline { background: var(--danger); }
+.menu-icon-btn, .sheet-close { color: var(--muted); background: rgba(9,18,22,.55); border: 1px solid var(--line); border-radius: 8px; min-width: 44px; min-height: 44px; font-size: 22px; }
+.menu-stack { left: clamp(28px,8vw,128px); max-width: 620px; }
+.logo { font-family: var(--sans); font-size: clamp(70px,8.8vw,140px); font-weight: 800; line-height: .88; letter-spacing: -.055em; color: var(--ink); filter: none; text-shadow: none; }
+.logo-sm { color: var(--ink-2); font-size: .36em; letter-spacing: -.03em; font-weight: 600; }
+.logo-sm.alt { color: var(--ink-2); font-size: .36em; letter-spacing: -.03em; font-weight: 600; }
+.logo-lg { color: var(--ink); text-shadow: none; -webkit-text-stroke: 0; }
+.tagline { color: var(--ink-2); font-size: 14px; font-weight: 400; max-width: 350px; line-height: 1.65; }
+.btn-play { font-family: var(--sans); font-size: 18px; font-weight: 700; letter-spacing: -.015em; color: var(--bg); background: var(--accent); border: 1px solid transparent; border-radius: 8px; box-shadow: none; min-width: 230px; padding: 15px 28px; }
+.btn-play:hover:not(:disabled) { background: #f0cfa5; box-shadow: none; }
+.menu-secondary { color: var(--muted); font-size: 12px; font-weight: 400; }
+.menu-secondary button, .menu-secondary a { color: var(--ink-2); background: transparent; border: 0; min-height: 44px; padding: 8px 0; font-size: 12px; }
+.mode-card { max-width: 280px; background: rgba(17,31,35,.90); border: 1px solid var(--line); }
+.mode-card header { font-family: var(--mono); font-size: 10px; color: var(--accent); letter-spacing: .08em; border-bottom: 1px solid var(--line); padding: 12px 16px; background: transparent; }
+.mode-body { color: var(--muted); font-size: 11px; line-height: 1.7; padding: 12px 16px; }
+.mode-body strong { color: var(--ink-2); font-weight: 600; }
+.waitroom { width: min(760px,94vw); padding: 24px; background: rgba(17,31,35,.96); }
+.waitroom-title { font-size: 26px; color: var(--ink); }
+.waitroom-head { font-size: 12px; color: var(--ink-2); }
+.crew-strip { gap: 8px; }
+.crew-chip { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 8px; min-height: 60px; color: var(--ink-2); font-size: 11px; }
+.crew-chip img { width: 44px; height: 52px; object-fit: contain; }
+.crew-chip.bot { opacity: .76; }
+.skins { gap: 8px; }
+.skin { width: auto; flex: 1; min-height: 112px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+.skin img { width: 68px; height: 88px; object-fit: contain; }
+.skin.sel { background: rgba(233,188,130,.08); border-color: rgba(233,188,130,.55); box-shadow: 0 0 0 1px rgba(233,188,130,.16); }
+.how-list { color: var(--ink-2); font-size: 13px; line-height: 1.7; }
+.overlay { background: rgba(4,10,13,.76); backdrop-filter: blur(8px); }
+.modal { color: var(--ink); padding: 24px; }
+.modal h2, .sheet h2 { color: var(--ink); font-size: 24px; line-height: 1.15; }
+.modal p { font-size: 13px; }
+.sheet { width: min(440px,94vw); }
+
+/* Game chrome stays quiet so the outpost remains the focal point. */
+.shell { background: var(--bg); padding: 8px; gap: 8px; }
+.topbar { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.brand { font-weight: 800; font-size: 19px; letter-spacing: -.04em; color: var(--ink); }
+.brand span { color: var(--muted); font-size: 10px; font-family: var(--mono); font-weight: 400; letter-spacing: .04em; }
+.stage { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.stat { color: var(--ink-2); font-family: var(--mono); font-size: 11px; background: transparent; }
+.stat-label { color: var(--muted); font-size: 10px; }
+.meter, .progress, .meet-timerbar { background: rgba(245,245,243,.07); border-radius: 4px; border: 0; }
+.meter-fill, .progress-fill, .meet-timerfill { background: var(--accent); border-radius: inherit; }
+.meet-timerfill.urgent { background: var(--danger); }
+.role-badge { background: var(--bg); border: 1px solid var(--line); color: var(--ink-2); border-radius: 7px; padding: 8px 10px; font-family: var(--sans); }
+.role-badge.human { color: var(--accent); border-color: rgba(233,188,130,.22); }
+.role-badge.parasite { color: var(--infection); background: rgba(183,231,119,.055); border-color: rgba(183,231,119,.25); }
+.role-main { font-size: 11px; font-weight: 600; letter-spacing: .03em; }
+.role-mode { font-family: var(--mono); font-size: 8px; line-height: 1.5; color: var(--muted); }
+.role-mode.sim { color: var(--accent); }
+.role-mode.inco { color: var(--ink-2); }
+.role-dot { background: var(--muted); border-radius: 50%; }
+.role-badge.human .role-dot { background: var(--accent); }
+.role-badge.parasite .role-dot { background: var(--infection); }
+.role-disconnect { color: var(--muted); background: transparent; border: 0; }
+.actionbar { gap: 6px; }
+.actionbar .btn { min-height: 54px; padding: 8px 14px; font-size: 11px; font-weight: 600; border-radius: 8px; box-shadow: none; }
+.actionbar .btn.active { background: rgba(233,188,130,.10); border-color: rgba(233,188,130,.35); }
+.ico { width: 20px; height: 20px; color: currentColor; }
+.key { font-family: var(--mono); font-size: 9px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: rgba(245,245,243,.025); }
+.task-list { font-size: 12px; }
+.task-item { color: var(--ink-2); padding: 9px 8px; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.task-item.active { background: rgba(233,188,130,.055); border-radius: 6px; }
+.task-item.done { color: var(--muted); opacity: .60; }
+.task-box { border: 1px solid var(--line-strong); border-radius: 3px; color: var(--accent); font-size: 11px; }
+.task-item.done .task-box { border-color: rgba(233,188,130,.25); background: rgba(233,188,130,.08); }
+.task-room { color: var(--muted); font-size: 10px; }
+.crew-list { font-size: 12px; }
+.crew-row, .crew-item { border-bottom: 1px solid var(--line); color: var(--ink-2); padding: 6px 8px; background: transparent; }
+.crew-avatar { width: 44px; height: 50px; object-fit: contain; }
+.crew-name { font-weight: 600; font-size: 12px; }
+.crew-row.dead, .crew-item.dead { opacity: .45; }
+.crew-status { color: var(--muted); font-size: 10px; }
+.chat { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; }
+.chat-log { font-size: 11px; line-height: 1.6; }
+.chat-msg, .chat-line { color: var(--ink-2); }
+.chat-who, .chat-name { color: var(--accent); font-weight: 600; }
+.chat-meta, .chat-time { color: var(--muted); font-family: var(--mono); font-size: 9px; }
+.chat-entry input, .chat-input { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; font-size: 12px; }
+.chat-entry button { min-width: 44px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px; }
+.voice { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; }
+.voice-name, .voice-hint, .voice-status { font-size: 10px; color: var(--muted); }
+.voice-user.speaking { color: var(--accent); }
+.voice-talk { color: var(--ink-2); background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; }
+.voice-talk.on { color: var(--accent); background: rgba(233,188,130,.08); }
+.minimap, .minimap-canvas { border: 1px solid var(--line); border-radius: 8px; background: var(--bg-1); }
+
+/* Tasks, meetings, verdict and the private role transition share the same kit. */
+.mg-panel, .mg-body { color: var(--ink-2); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+.mg-title { font-weight: 700; color: var(--ink); }
+.mg-label, .mg-caption { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.mg-btn, .mg-tile, .mg-target, .mg-step, .mg-key { background: var(--bg-2); color: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; }
+.mg-btn.active, .mg-tile.active, .mg-target.active, .mg-step.active, .mg-key.active, .mg-tile.lit, .mg-step.lit { background: rgba(233,188,130,.16); color: var(--accent); border-color: rgba(233,188,130,.30); }
+.mg-progress, .mg-track { background: var(--bg-3); border: 1px solid var(--line); border-radius: 4px; }
+.mg-fill { background: var(--accent); border-radius: inherit; }
+.mg-error { color: var(--danger); }
+.mg-success { color: var(--accent); }
+.task-saving { color: var(--accent); font-size: 12px; }
+.task-status, .task-error { font-size: 12px; color: var(--muted); }
+.task-error { color: var(--danger); }
+.timer { font-family: var(--mono); font-weight: 600; font-size: 32px; color: var(--accent); }
+.timer.urgent { color: var(--danger); }
+.vote-card { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; color: var(--ink-2); font-size: 12px; }
+.vote-card img { width: 56px; height: 70px; object-fit: contain; }
+.vote-card.voted { border-color: rgba(233,188,130,.55); background: rgba(233,188,130,.08); }
+.vote-card.dead { opacity: .4; }
+.dead-tag { color: var(--danger); font-size: 9px; font-family: var(--mono); }
+.eject { color: var(--ink-2); }
+.eject img { width: 90px; height: 112px; object-fit: contain; }
+.eject-void { background: radial-gradient(ellipse,rgba(183,231,119,.05),transparent 70%); }
+.verdict { color: var(--ink); font-weight: 700; font-size: 20px; }
+.verdict.parasite { color: var(--infection); }
+.verdict.human { color: var(--ink-2); }
+.end-title { font-size: clamp(24px,4vw,40px); letter-spacing: -.035em; }
+.end-title.crew { color: var(--accent); }
+.end-title.parasite { color: var(--infection); }
+.role-reveal { background: radial-gradient(ellipse at 50% 65%,rgba(183,231,119,.12),transparent 65%),rgba(4,10,13,.96); }
+.role-reveal-noise { display: none; }
+.role-reveal-body { max-width: 820px; padding: 24px; }
+.role-reveal-eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--infection); }
+.role-reveal-title { font-family: var(--sans); font-size: clamp(32px,6.5vw,76px); font-weight: 800; line-height: .96; letter-spacing: -.04em; color: var(--ink); text-shadow: none; }
+.role-reveal-sub { color: var(--muted); font-size: 13px; max-width: 400px; line-height: 1.6; margin: 18px auto 0; }
+.stage-stick { background: rgba(9,18,22,.50); border: 1px solid var(--line-strong); border-radius: 50%; }
+.stage-stick-knob { background: rgba(233,188,130,.22); border: 1px solid rgba(233,188,130,.32); border-radius: 50%; }
+
+.gal { height: 100dvh; overflow: auto; padding: 24px clamp(20px,5vw,80px) 64px; background: var(--bg); }
+.gal-nav { display: flex; justify-content: space-between; align-items: center; min-height: 52px; margin-bottom: 36px; border-bottom: 1px solid var(--line); }
+.gal-nav a { font-size: 12px; text-decoration: none; padding: 16px 0; }
+.gal h1 { font-size: clamp(32px,5vw,60px); margin-bottom: 10px; }
+.gal h2 { font-size: 20px; margin-top: 44px; margin-bottom: 12px; }
+.gal-intro { color: var(--muted); max-width: 540px; font-size: 13px; }
+.gal-grid { display: grid; grid-template-columns: repeat(8,minmax(0,1fr)); gap: 10px; }
+.gal figure { margin: 0; padding: 12px 8px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px; }
+.gal figure img { display: block; width: 100%; height: auto; aspect-ratio: 4/5; object-fit: contain; }
+.gal figcaption { font-family: var(--mono); font-size: 10px; color: var(--ink-2); display: flex; flex-direction: column; gap: 3px; }
+.gal figcaption span { color: var(--muted); font-size: 9px; }
+@media (max-width: 960px) { .gal-grid { grid-template-columns: repeat(4,minmax(0,1fr)); } .mode-card { max-width: 236px; } }
+@media (max-width: 700px) {
+  .menu-stack { left: 24px; top: 40%; max-width: calc(100vw - 48px); }
+  .logo { font-size: clamp(68px,17vw,106px); }
+  .menu-canvas { object-position: 64% 40%; }
+  .menu-scrim { background: linear-gradient(0deg,rgba(9,18,22,.95),rgba(9,18,22,.34) 68%,rgba(9,18,22,.50)); }
+  .tagline { font-size: 12px; max-width: 270px; }
+  .btn-play { min-width: 210px; font-size: 16px; }
+  .mode-card { max-width: 260px; bottom: 16px; right: 16px; }
+  .mode-card header { padding: 8px 12px; }
+  .mode-body { font-size: 10px; padding: 8px 12px; line-height: 1.55; }
+  .shell { padding: 4px; gap: 4px; }
+  .topbar { padding: 8px 10px; }
+  .brand { font-size: 15px; }
+  .brand span { font-size: 8px; }
+  .role-badge { padding: 6px; }
+  .role-mode { font-size: 7px; }
+  .actionbar { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; }
+  .actionbar .btn { width: 100%; padding: 6px; min-height: 48px; font-size: 10px; }
+  .actionbar .key { display: none; }
+  .modal { padding: 20px; max-height: 90dvh; }
+  .waitroom { padding: 18px; max-height: 92dvh; overflow: auto; }
+  .skin { min-height: 96px; }
+  .skin img { width: 52px; height: 76px; }
+  .vote-card img { width: 44px; height: 54px; }
+  .gal-grid { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; }
+  .gal figure { padding: 8px 4px; }
+  .gal figcaption { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

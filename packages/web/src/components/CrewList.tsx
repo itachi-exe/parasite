@@ -2,12 +2,7 @@
 
 import type { PublicPlayer, Seat } from '@parasite/shared';
 
-const SKIN_SRC = [
-  '/sprites/human-0.png',
-  '/sprites/human-1.png',
-  '/sprites/human-2.png',
-  '/sprites/human-3.png',
-];
+import { portraitPath } from '../game/presentation';
 
 /**
  * Right panel: the crew roster, using the official chibi avatars.
@@ -34,7 +29,7 @@ export default function CrewList(props: {
           {players.map((p) => {
             const isMe = p.seat === mySeat;
             // Only ever reveal the Parasite art for the local player's own row.
-            const src = isMe && isParasite ? '/sprites/parasite.png' : SKIN_SRC[p.skin % 4];
+            const src = portraitPath(p.seat, p.skin, isMe && isParasite ? 'parasite' : 'human');
             return (
               <li
                 key={p.seat}

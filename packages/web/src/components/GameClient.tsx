@@ -293,7 +293,7 @@ export default function GameClient() {
 
   // ── Actions ────────────────────────────────────────────────────────────────
   const doTaskComplete = useCallback(async () => {
-    if (!openTask) return;
+    if (!openTask) return false;
     if (isParasite) {
       // The Parasite's tasks are fake: never report them, or the Parasite would
       // be helping the crew win. The UI still plays the minigame so a shoulder
@@ -301,11 +301,13 @@ export default function GameClient() {
       setMyTasksDone((d) => [...d, openTask]);
       setOpenTask(null);
       sock.pushToast('info', 'Task faked. Nothing was submitted.');
-      return;
+      return true;
     }
-    await sock.completeTask(openTask);
+    const result = await sock.completeTask(openTask);
+    if (!result.ok) return false;
     setMyTasksDone((d) => (d.includes(openTask) ? d : [...d, openTask]));
     setOpenTask(null);
+    return true;
   }, [openTask, isParasite, sock]);
 
   const doJump = useCallback(async () => {
@@ -695,7 +697,7 @@ export default function GameClient() {
         />
       )}
 
-      {sock.end && <EndOverlay end={sock.end} players={state?.players ?? []} />}
+      {sock.end && <EndOverlay end={sock.end} players={state?.players ?? []} roleMode={role.mode} />}
 
       {reveal !== null && (
         <RoleRevealOverlay key={reveal} onDone={() => setReveal(null)} />

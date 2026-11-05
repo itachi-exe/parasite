@@ -22,6 +22,11 @@ export interface Toast {
   text: string;
 }
 
+export interface ActionResult {
+  ok: boolean;
+  error?: string;
+}
+
 export interface UseGameSocket {
   connected: boolean;
   state: RoomState | null;
@@ -44,13 +49,13 @@ export interface UseGameSocket {
   /** Live positions, updated at the server tick rate between full snapshots. */
   positions: Map<Seat, { x: number; y: number; dir: -1 | 1; moving: boolean }>;
   join: (opts: { code: string; name: string; skin: SkinId; address: string | null }) => Promise<void>;
-  startGame: () => Promise<void>;
+  startGame: () => Promise<ActionResult>;
   sendInput: (ax: number, ay: number, fx?: number, fy?: number) => void;
-  completeTask: (taskId: TaskId) => Promise<void>;
-  callMeeting: () => Promise<void>;
-  reportBody: (victimSeat: Seat) => Promise<void>;
-  castVote: (target: Seat | 'skip') => Promise<void>;
-  purge: (targetSeat: Seat) => Promise<void>;
+  completeTask: (taskId: TaskId) => Promise<ActionResult>;
+  callMeeting: () => Promise<ActionResult>;
+  reportBody: (victimSeat: Seat) => Promise<ActionResult>;
+  castVote: (target: Seat | 'skip') => Promise<ActionResult>;
+  purge: (targetSeat: Seat) => Promise<ActionResult>;
   jumpAnnounce: (targetSeat: Seat) => Promise<{ ok: boolean; error?: string }>;
   submitEjectionReveal: (wasParasite: boolean) => void;
   reportChainGameId: (chainGameId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -183,6 +188,7 @@ export function useGameSocket(): UseGameSocket {
       const res = await emitAck<{ ok: boolean; error?: string }>(event, payload);
       if (!res.ok) pushToast('warn', res.error ?? 'That did not work.');
       else if (successMsg) pushToast('info', successMsg);
+      return res;
     },
     [emitAck, pushToast]
   );

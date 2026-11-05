@@ -1,0 +1,39 @@
+{
+  "fonts": [
+    {
+      "file": "inter-400.woff",
+      "weight": 400,
+      "family": "Inter",
+      "bytes": 139540,
+      "sha256": "f392661e28a31a00950592090657e66058c2918f89a2592637502c9f83d25a65",
+      "ascii_complete": true
+    },
+    {
+      "file": "inter-800.woff",
+      "weight": 800,
+      "family": "Inter ExtraBold",
+      "bytes": 144216,
+      "sha256": "54efb38d859ccdb468c1b6662086644700b9974e33ec12695ddfcb9d937fef26",
+      "ascii_complete": true
+    },
+    {
+      "file": "inter-600.woff",
+      "weight": 600,
+      "family": "Inter SemiBold",
+      "bytes": 143564,
+      "sha256": "b79b32fd5e17c45f0cd249c57f700fed6f4fbb4c03cb41b81e828feb6f37a788",
+      "ascii_complete": true
+    },
+    {
+      "file": "inter-700.woff",
+      "weight": 700,
+      "family": "Inter",
+      "bytes": 144052,
+      "sha256": "52026705fdc61b964e77937b199b9888c8200281b81cffff648c54f8d9e98e79",
+      "ascii_complete": true
+    }
+  ],
+  "license": "SIL Open Font License 1.1",
+  "license_source": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt",
+  "source": "Local Inter copies verified against OpenType metadata"
+}

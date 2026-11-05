@@ -98,6 +98,9 @@ export class GameServer {
 
         this.socketRoom.set(socket.id, code);
         await socket.join(code);
+        if (!this.isCurrentRoom(room) || this.socketRoom.get(socket.id) !== code) {
+          return ack?.({ ok: false, error: 'Room closed before the join completed.' });
+        }
         // A real player has arrived: drop a bot if one was holding a seat for
         // them. Done before the ack so the client's first snapshot is correct.
         room.syncBots();
@@ -122,6 +125,9 @@ export class GameServer {
         const room = this.roomOf(socket);
         if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
         const res = await room.startGame(socket.id);
+        if (!this.isCurrentRoom(room)) {
+          return ack?.({ ok: false, error: 'Room closed before the game started.' });
+        }
         if (!res.ok) {
           this.cleanup(room);
           this.broadcastState(room);
@@ -196,6 +202,9 @@ export class GameServer {
         if (!room) return ack?.({ ok: false, error: 'Not in a room.' });
         // Returns the same answer for real jumps and decoys.
         const result = await room.jumpAnnounce(socket.id, payload.targetSeat);
+        if (!this.isCurrentRoom(room)) {
+          return ack?.({ ok: false, error: 'Room closed before the Jump settled.' });
+        }
         ack?.(result);
         // Simulated mode only: re-tell everyone their current role. For a
         // decoy (or an Inco-mode call, where this is a no-op) it re-sends the
@@ -384,8 +393,15 @@ export class GameServer {
     return code ? this.rooms.get(code) : undefined;
   }
 
+  private isCurrentRoom(room: GameRoom): boolean {
+    return this.rooms.get(room.code) === room;
+  }
+
   private cleanup(room: GameRoom): void {
-    if (room.isEmpty()) this.rooms.delete(room.code);
+    if (!this.isCurrentRoom(room)) return;
+    // Disconnected committed seats remain only while another human can use the room.
+    const vacant = [...room.players.values()].every((p) => p.isBot || !p.connected);
+    if (room.isEmpty() || vacant) this.rooms.delete(room.code);
   }
 
   /**
@@ -400,8 +416,9 @@ export class GameServer {
    * their own encrypted bit from chain with their own wallet.
    */
   private async deliverSimulatedRoles(room: GameRoom): Promise<void> {
-    if (room.roleMode !== 'simulated') return;
+    if (room.roleMode !== 'simulated' || !this.isCurrentRoom(room)) return;
     await room.recoverSimulatedRoles();
+    if (!this.isCurrentRoom(room)) return;
     for (const player of room.players.values()) {
       if (player.isBot || !player.connected || this.socketRoom.get(player.id) !== room.code) continue;
       const isParasite = room.simulatedRoleForSeat(player.seat);
@@ -411,7 +428,7 @@ export class GameServer {
   }
 
   private broadcastState(room: GameRoom): void {
-    if (!this.rooms.has(room.code)) return;
+    if (!this.isCurrentRoom(room)) return;
     for (const p of room.players.values()) {
       if (!p.isBot && p.connected && this.socketRoom.get(p.id) === room.code) {
         if (room.phase === 'lobby') this.io.to(p.id).emit('you', { id: p.id, seat: p.seat });
@@ -422,7 +439,9 @@ export class GameServer {
 
   /** Fan out a batch of room emits, then run any follow-up local resolution. */
   private async flush(room: GameRoom, emits: Emit[]): Promise<void> {
+    if (!this.isCurrentRoom(room)) return;
     for (const e of emits) {
+      if (!this.isCurrentRoom(room)) return;
       switch (e.type) {
         case 'rolesUpdated':
           await this.deliverSimulatedRoles(room);
@@ -457,10 +476,12 @@ export class GameServer {
     }
 
     // Simulated mode resolves its own reveals; Inco mode waits for a client.
-    const follow: Emit[] = [
-      ...(await room.resolveEjectionLocally()),
-      ...(await room.resolveFinalRevealLocally()),
-    ];
+    if (!this.isCurrentRoom(room)) return;
+    const ejection = await room.resolveEjectionLocally();
+    if (!this.isCurrentRoom(room)) return;
+    const finalReveal = await room.resolveFinalRevealLocally();
+    if (!this.isCurrentRoom(room)) return;
+    const follow: Emit[] = [...ejection, ...finalReveal];
     if (follow.length) await this.flush(room, follow);
   }
 
