@@ -31,7 +31,7 @@ import TaskModal from './TaskModal';
 import MeetingOverlay from './MeetingOverlay';
 import AlertBanner, { type AlertPayload } from './AlertBanner';
 import MiniMap from './MiniMap';
-import GameStage from './GameStage';
+import GameStage, { preloadGameScene } from './GameStage';
 import RoleBadge from './RoleBadge';
 import EndOverlay from './EndOverlay';
 import RoleRevealOverlay from './RoleRevealOverlay';
@@ -88,6 +88,11 @@ export default function GameClient() {
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   const { state, mySeat, positions } = sock;
+
+  useEffect(() => {
+    // Fetch the engine in the waiting room without creating a canvas or capturing keys.
+    if (joined) void preloadGameScene().catch(() => {});
+  }, [joined]);
 
   useEffect(() => {
     if (state?.phase !== 'playing') return;

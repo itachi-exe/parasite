@@ -26,14 +26,18 @@ const http = createServer((req, res) => {
 });
 
 const io = new Server(http, {
+    maxHttpBufferSize: 64 * 1024,
+    allowRequest: (req, callback) => {
+      const origin = req.headers.origin;
+      callback(null, !origin || ['https://theparasite.xyz', 'https://www.theparasite.xyz'].includes(origin));
+    },
   cors: {
-    // Local dev only; the server binds to loopback.
-    origin: true,
+    origin: ['https://theparasite.xyz', 'https://www.theparasite.xyz'],
     methods: ['GET', 'POST'],
   },
 });
 
-const game = new GameServer(io, { contractAddress: CONTRACT });
+const game = new GameServer(io, { contractAddress: CONTRACT, maxRooms: 4 });
 
 http.listen(PORT, HOST, () => {
   const mode = CONTRACT ? 'INCO (on-chain encrypted roles)' : 'SIMULATED (no contract configured)';

@@ -24,7 +24,7 @@ test('renderer removes a hidden seat rather than resurrecting snapshot coordinat
     readInput: () => [0, 0], lastSent: { ax: 0, ay: 0, at: 0 }, people,
     scene: new THREE.Scene(), predict: (p: PublicPlayer) => p,
     syncBodies() {}, applySight() {}, updateStations() {}, updateCamera() {}, placeTags() {},
-    outpost: { update() {} }, still: false,
+    outpost: { update() {}, lights: [] }, camAt: new THREE.Vector3(), still: false,
   };
   ThreeScene.prototype.step.call(scene as unknown as ThreeScene, 0, 0.05);
   assert.deepEqual([...people.keys()], [0]);
@@ -47,7 +47,7 @@ test('idle facing changes travel through the existing input bridge', () => {
     bridge: { players: [], positions: new Map(), onInput: (...args: unknown[]) => sent.push(args) },
     readInput: () => [0, 0], lastSent: { ax: 0, ay: 0, at: 0, look: Math.PI / 2 }, look: 0,
     people: new Map(), syncBodies() {}, applySight() {}, updateStations() {}, updateCamera() {}, placeTags() {},
-    outpost: { update() {} }, still: false,
+    outpost: { update() {}, lights: [] }, camAt: new THREE.Vector3(), still: false,
   };
   ThreeScene.prototype.step.call(scene as unknown as ThreeScene, 0, 0.05);
   assert.deepEqual(sent, [[0, 0, 1, 0]]);
@@ -60,7 +60,7 @@ test('corpse appearance keeps full roster metadata without granting a location',
     bridge: { players: roster, positions: new Map() }, readInput: () => [0, 0],
     lastSent: { ax: 0, ay: 0, at: 0 }, people: new Map(),
     syncBodies: (p: PublicPlayer[]) => { received = p; }, applySight() {}, updateStations() {}, updateCamera() {}, placeTags() {},
-    outpost: { update() {} }, still: false,
+    outpost: { update() {}, lights: [] }, camAt: new THREE.Vector3(), still: false,
   };
   ThreeScene.prototype.step.call(scene as unknown as ThreeScene, 0, 0.05);
   assert.deepEqual(received, roster);

@@ -5,6 +5,8 @@ import type { RoomState, Seat, TaskId } from '@parasite/shared';
 import { TASK_DEFS } from '@parasite/shared';
 import type { SceneBridge } from '@/game/bridge';
 
+export const preloadGameScene = () => import('@/game/three/ThreeScene');
+
 /**
  * Mounts the three.js scene and feeds it the latest snapshot.
  *
@@ -48,7 +50,7 @@ export default function GameStage(props: {
     let destroyed = false;
     let scene: { destroy(): void } | null = null;
     (async () => {
-      const { ThreeScene } = await import('@/game/three/ThreeScene');
+      const { ThreeScene } = await preloadGameScene();
       if (destroyed || !hostRef.current) return;
       scene = new ThreeScene(hostRef.current, bridge.current);
     })();

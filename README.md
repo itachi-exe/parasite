@@ -1,137 +1,144 @@
+<div align="center">
+<img src="docs/screenshots/icon.svg" width="72" alt="Parasite mark" />
+
 # Parasite
 
-A real-time multiplayer social deduction game where **the traitor's identity is
-encrypted on-chain**, not held by a server.
+**A social deduction game where the infection can change hosts.**
 
-Built for the **Inco Track** of the Inco x Megapot Summer Game Jam.
+A crew of scientists, a jungle research outpost, and a teammate who may not stay human.
 
-Four to ten players wake on a derelict research station. One of them is not
-human. The crew completes tasks to win; the Parasite purges them one at a time.
-Bodies get reported, meetings get called, and someone gets voted into space.
+[Play the live demo](https://theparasite.xyz)
 
-The twist that needs a blockchain: **the Parasite can Jump**. Mid-game, the
-Parasite transfers the infection to another living player. Nobody — not the
-other players, not the game server, not an observer reading every transaction —
-can tell that it happened, who did it, or who received it. The player who was
-the Parasite genuinely becomes innocent, and the accused genuinely becomes
-guilty, with no trusted party anywhere in the loop.
+![Live desktop menu](docs/screenshots/menu.png)
+</div>
 
----
+## Current release
 
-## Why this needs FHE and not just a private server
+The public release is a wallet-free browser demo with **simulated, server-managed roles, not encrypted gameplay**. It uses Three.js, not Phaser. Bots fill the initial solo crew, so one person can start a round. A separate Inco contract integration exists in the repository; this README does not claim that the live release uses it or that its confidentiality properties have been established by this submission.
 
-A normal game server *could* hide the roles. The reason it isn't good enough is
-that every player has to take the server's word for it. With Inco Lightning the
-role is an `euint256` handle on Base Sepolia:
+## Contents
 
-- **Only you can read your own role.** `myRoleHandle(gameId)` is scoped to
-  `msg.sender`, and decrypting it requires your wallet's EIP-712 signature. The
-  server never sees a role. There is no admin key that can.
-- **The Jump has no observable signature.** Jumping cannot be gated with
-  `require(isParasite)` — a revert is a side channel, and a transaction that
-  only succeeds for the Parasite identifies them. Instead the contract runs
-  `hostSeat = e.select(callerIsHost, targetSeat, hostSeat)` for *everybody*.
-  A non-Parasite's jump is a silent, successful no-op.
-- **Everyone sends jumps.** The client emits decoy jumps on a jitter, so the
-  existence of a jump transaction says nothing about the sender. Real jumps and
-  decoys are byte-identical, emit the same event shape, and burn identical gas
-  — all three are asserted in the test suite.
-- **Exactly one bit is ever revealed.** On ejection the contract publishes
-  `e.eq(hostSeat, ejectedSeat)` — "was this seat the Parasite?" — and nothing
-  else. A "no" leaves the Parasite hidden among everyone still alive.
+1. [The game](#the-game)
+2. [A tour of the current build](#a-tour-of-the-current-build)
+3. [How it is built](#how-it-is-built)
+4. [Build and test](#build-and-test)
+5. [AI contribution](#ai-contribution)
+6. [Development plan](#development-plan)
+7. [Verification and limits](#verification-and-limits)
 
----
+## The game
 
-## Running it locally
+The crew wins by completing research tasks or ejecting the Parasite. The Parasite hunts the crew and can transfer the infection to another living scientist. A player who was innocent earlier can become the threat later, while the previous host can genuinely become innocent.
 
-Requires Node 20+.
+Bodies trigger discussion and voting. Directional sight limits what a living scientist can see, and the server filters unseen positions rather than relying solely on a dark overlay.
 
-```bash
-npm install
-npm run build:shared     # the server and web both import @parasite/shared
-npm run dev              # server on 127.0.0.1:9101, web on 127.0.0.1:9100
+## A tour of the current build
+
+These are desktop captures from the public HTTPS game, made at 1440x900. The capture tools are `scripts/loadout-record.mjs` and `scripts/loadout-cdp-record.mjs`. Automated visual interpretation was quota-blocked, so these are not presented as an artistic approval.
+
+### 1. Landing and mode disclosure
+
+The opening menu introduces Virelia Research Outpost and offers **Play** and **How to play**. The mode card explicitly says that this build's roles are not encrypted. A visitor does not need a wallet to try it.
+
+![Landing and mode disclosure](docs/screenshots/menu.png)
+
+### 2. Room lobby and solo bots
+
+Enter a name and outpost code to join the waiting room. The lobby shows the scientist roster and marks bots. **Begin the expedition** starts the match when enough seats are available.
+
+![Bot-filled room](docs/screenshots/lobby.png)
+
+### 3. Outpost and role reveal
+
+The Three.js scene draws the scientists and outpost, while the surrounding interface shows tasks, crew and actions. Receiving the Parasite role triggers an explicit reveal. This image is from a separate real public round in which the recording player started as the Parasite.
+
+![Role reveal in the live game](docs/screenshots/game.png)
+
+### 4. Body report and discussion
+
+A reported body interrupts exploration with a meeting. This capture records Wraith reporting Cipher's body in an unseeded public game with native bots. Discussion runs before voting opens.
+
+![Body report discussion](docs/screenshots/discussion.png)
+
+### 5. Voting
+
+During **Voting is open**, living scientists can choose another scientist or **Skip vote**. The interface shows which crew members remain and the number of votes cast. Bots participate through the actual server logic.
+
+![Actual meeting voting](docs/screenshots/voting.png)
+
+### 6. Meeting outcome
+
+The meeting resolves before exploration resumes. This round produced **Nobody was ejected**, rather than a staged successful accusation. The game keeps uncertainty when the vote does not identify a target.
+
+![No-ejection result](docs/screenshots/result.png)
+
+### 7. A changed infection host
+
+After the meeting, the recording player's role changed from **HUMAN** to **PARASITE**. The task panel now explains that the new host's tasks are fake. This is a simulated-role transfer in the running game, not evidence of an on-chain encrypted Jump.
+
+![Later Parasite state](docs/screenshots/transfer.png)
+
+## How it is built
+
+```mermaid
+flowchart LR
+    UI[React interface] --> Socket[Socket.io connection]
+    Scene[Three.js renderer] --> UI
+    Socket --> Server[Authoritative game server]
+    Server --> Rules[Shared movement and sight rules]
+    Server --> Bots[Programmed crewmate bots]
+    Server --> Roles[Simulated role oracle in live demo]
+    Optional[Separate optional Inco path] -. not active in public demo .-> Server
 ```
 
-Open **http://127.0.0.1:9100** in four tabs, enter the same room code, and hit
-Start. It also runs with no wallet and no deployed contract, see the two modes
-below.
+| Folder | Job |
+| --- | --- |
+| `packages/shared` | Wire types, movement, map and visibility rules |
+| `packages/server` | Authoritative movement, tasks, meetings, bots and simulated roles |
+| `packages/web` | Next.js/React interface and Three.js world |
+| `packages/contracts` | Separate Solidity/Inco implementation and local contract tests |
+| `docs/inco.md` | Reference for the optional private-role integration |
 
-### The two role modes
+The deployed frontend is a static export served by nginx. Socket.io connects it to the multiplayer backend. No Next.js server is needed for that static release. Production capacity is deliberately capped at four rooms and 24 proxied connections.
 
-The app boots in whichever mode its configuration supports, and the HUD badge
-always states which one is live. It never silently pretends.
+## Build and test
 
-| | **Simulated** (default) | **Inco** |
-|---|---|---|
-| Set by | no `NEXT_PUBLIC_PARASITE_GAME_ADDRESS` | that variable set to a deployed address |
-| Roles come from | the server, sent privately per-socket | `myRoleHandle` + `attestedDecrypt` |
-| Jump | server-side transfer | on-chain `jump()` with encrypted target |
-| Wallet needed | no | yes (Base Sepolia) |
-| Trust model | **you trust the server** | **you trust nobody** |
-
-Simulated mode exists so the game is playable and reviewable in one command.
-It is not the point of the project; it's the fallback that keeps the project
-demonstrable without a funded key.
-
-### Deploying the contract (needs a funded key)
+Requires Node.js 20 or later. From the repository root:
 
 ```bash
-cp .env.example .env
-# set DEPLOYER_PRIVATE_KEY to a Base Sepolia key with testnet ETH
-npm run compile:contracts
-npm run deploy:baseSepolia
-# put the printed address in NEXT_PUBLIC_PARASITE_GAME_ADDRESS, then npm run dev
-```
-
-### Live deployment
-
-**Inco mode is deployed and running.**
-
-| | |
-|---|---|
-| Play | [theparasite.xyz](https://theparasite.xyz) |
-| Contract | [`0xe304aCd0DFdAe69B5480b7caB45c412dd45A04C6`](https://sepolia.basescan.org/address/0xe304aCd0DFdAe69B5480b7caB45c412dd45A04C6) |
-| Chain | Base Sepolia (84532) |
-| Inco Lightning | `0xe9CB49A5b16C6D4a093E5900AA8b450FD40541B6` |
-
-The contract is pre-funded with 0.001 ETH for FHE fees. The running instance
-reports `role mode INCO (on-chain encrypted roles)` at boot, and the server
-holds no oracle in that mode — it cannot derive anyone's role.
-
-Players need a wallet on Base Sepolia to decrypt their own role; the role badge
-in the top bar prompts for one and does the decryption in the browser.
-
----
-
-## Tests
-
-```bash
-npm test          # shared rules, server sockets, contracts
-npm run typecheck
-```
-
-There is also an over-the-wire smoke test that drives the *built* server with
-four real socket clients at production timings:
-
-```bash
+npm ci
 npm run build
-node packages/server/dist/index.js &          # binds 127.0.0.1:9101
-node packages/server/src/e2e.smoke.mjs
+npm run typecheck
+npm test
 ```
 
----
+The launch tree contains the static-export configuration. To preview its static output, serve `packages/web/out` with a static file server and run `packages/server/dist/index.js` separately with the socket endpoint configured for your preview. Do not reuse production ports or assume the browser's endpoint is dynamically replaced after building.
 
-## Layout
+To regenerate submission captures against the live demo, the recording scripts need Puppeteer, the installed Chromium executable and ffmpeg. The CDP recorder writes JPEG frames with their actual capture timestamps, preserving the timing of the observed game rather than inventing smooth motion between images.
 
-```
-packages/shared      game rules, wire protocol, RoleOracle seam   (~900 loc)
-packages/server      authoritative Socket.io server, 20Hz tick   (~2300 loc)
-packages/web         Next.js 15 + Phaser 3 client                (~2500 loc)
-packages/contracts   ParasiteGame.sol + Hardhat harness          (~1500 loc)
-docs/inco.md         distilled Inco Lightning reference
-```
+## AI contribution
 
-The server is deliberately **role-ignorant** in Inco mode: it runs movement,
-proximity, meetings and voting, and it is not told who the Parasite is. That
-split is the whole architecture — the server owns physics, the chain owns
-secrets.
+AI assisted development of procedural 3D assets and rendering, React interfaces, server and bot iteration, regression tests, browser automation, performance investigation and documentation. The bots themselves use programmed rules, not live LLM inference. Product decisions and final submission responsibility remain with the builder.
+
+## Development plan
+
+1. Structured human playtests, core-loop balance, reconnect handling and real-phone performance measurement.
+2. Public matchmaking, stronger solo practice, touch controls and quality presets.
+3. Reproducible end-to-end testnet verification of the separate Inco integration before making encryption claims.
+4. Later: optional over-the-shoulder third-person v3, more maps and ranked play if player demand supports them.
+
+Mainnet is a future decision requiring security review and cost approval. No roadmap item above is represented as shipped.
+
+## Verification and limits
+
+| Check | Evidence and scope |
+| --- | --- |
+| Launch regression suite | Launch log records 192 passing tests; not rerun by this documentation pass |
+| Endurance | Launch log records 600 seconds of automated socket play and six completed rounds; not a human-device GPU benchmark |
+| Public browser recording | Actual HTTPS game, bot body report, discussion, voting, no-ejection result and later role change |
+| Media | 90.15-second silent H.264 capture, 1280x800, 20 fps container; source capture cadence is low |
+| Confidentiality | Public roles are simulated and trusted to the server |
+| Visual review | Automated image review unavailable due quota; normal-device playback and aesthetics remain unapproved |
+| Submission | X posting and form submission remain with the builder because account authentication and form access are unavailable here |
+
+See [release notes](docs/release.md) for the published build's checks and limitations.

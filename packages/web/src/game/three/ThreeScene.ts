@@ -24,6 +24,7 @@ import { buildCrew, buildFallen, glowMat, geo, type CrewRig, type Facing4 } from
 import { buildOutpost, addNightLights, toScene } from './outpost3d';
 import { setupRenderer, setupEnvironment, makePost, type Post } from './post';
 import { VisionMask, VISION, canSee, rayLength } from './vision';
+import { limitNearbyLights } from './lightBudget';
 
 /** Interpolated motion below this (px per frame) is 20Hz noise, not a turn. */
 const TURN_DEADZONE = 0.35;
@@ -131,8 +132,9 @@ export class ThreeScene {
     host.style.touchAction = 'none';
 
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
+    this.renderer.setPixelRatio(1);
     setupRenderer(this.renderer);
+    this.renderer.shadowMap.enabled = false;
     this.renderer.domElement.style.display = 'block';
     host.appendChild(this.renderer.domElement);
 
@@ -146,7 +148,7 @@ export class ThreeScene {
     this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
     this.w = host.clientWidth || 1280;
     this.h = host.clientHeight || 720;
-    this.post = makePost(this.renderer, this.scene, this.cam, this.w, this.h, 0.5);
+    this.post = makePost(this.renderer, this.scene, this.cam, this.w, this.h, 0.5, true);
     this.resize();
 
     this.overlay = document.createElement('div');
@@ -382,6 +384,7 @@ export class ThreeScene {
     this.outpost.update(this.still ? 2 : t);
     this.updateStations(me, t);
     this.updateCamera(me, dt);
+    limitNearbyLights(this.outpost.lights, this.camAt.x, this.camAt.z, 4);
     this.placeTags();
   }
 

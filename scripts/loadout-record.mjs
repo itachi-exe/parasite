@@ -1,0 +1,12 @@
+import puppeteer from 'puppeteer';
+import {mkdirSync,writeFileSync} from 'node:fs';
+const out=process.env.CAPTURE_DIR || 'captures/loadout';mkdirSync(out,{recursive:true});
+const b=await puppeteer.launch({headless:true,executablePath:process.env.CHROME_PATH || undefined,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader'],defaultViewport:{width:1440,height:900}});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));let rec;
+try{const p=await b.newPage();p.on('pageerror',e=>console.log('PAGE ERROR',e.message));await p.goto('https://theparasite.xyz/',{waitUntil:'networkidle2',timeout:60000});console.log('MENU',await p.evaluate(()=>document.body.innerText));await p.screenshot({path:out+'/menu.png'});
+const click=async t=>p.evaluate(t=>{const x=[...document.querySelectorAll('button,a')].find(x=>x.textContent.trim().startsWith(t)&&!x.disabled);if(x)x.click();return !!x;},t);
+await click('Play');await sleep(700);console.log('FORM',await p.evaluate(()=>document.body.innerText));await p.waitForSelector('#lobby-name',{timeout:10000});await p.click('#lobby-name',{clickCount:3});await p.type('#lobby-name','Dr Vale',{delay:70});await p.click('#lobby-code',{clickCount:3});await p.type('#lobby-code','FILM'+Math.floor(Math.random()*99999));await click('Join outpost');await sleep(2500);console.log('LOBBY',await p.evaluate(()=>document.body.innerText));await p.screenshot({path:out+'/lobby.png'});await click('Begin');await sleep(7000);await click('Continue');await click('Got it');await click('Close');await sleep(1000);console.log('GAME',await p.evaluate(()=>document.body.innerText));await p.screenshot({path:out+'/game.png'});
+rec=await p.screencast({path:out+'/gameplay.webm',format:'webm',fps:20});const started=Date.now();const history=[];
+for(let i=0;i<16;i++){let k=['d','w','a','s'][i%4];await p.keyboard.down(k);await sleep(800);await p.keyboard.up(k);await sleep(500);await click('Continue');await click('Got it');let text=await p.evaluate(()=>document.body.innerText);history.push({seconds:(Date.now()-started)/1000,text});console.log('BEAT',i,text.slice(-1200));if(i%4===0)await p.screenshot({path:out+'/beat-'+i+'.png'});await sleep(700);}
+await rec.stop();rec=null;writeFileSync(out+'/recording-evidence.json',JSON.stringify({source:'https://theparasite.xyz',mode:'simulated',history},null,2));console.log('RECORDED',Date.now()-started);
+}finally{if(rec)await rec.stop();await b.close();}

@@ -138,7 +138,7 @@ export interface Post {
 }
 
 /** `aoScale` < 1 runs AO at reduced resolution for laptops. */
-export function makePost(r: THREE.WebGLRenderer, scene: THREE.Scene, cam: THREE.Camera, w: number, h: number, aoScale = 0.5): Post {
+export function makePost(r: THREE.WebGLRenderer, scene: THREE.Scene, cam: THREE.Camera, w: number, h: number, aoScale = 0.5, fast = false): Post {
   const composer = new EffectComposer(r);
   // the vision pass reads scene depth straight from whichever buffer RenderPass wrote
   for (const rt of [composer.renderTarget1, composer.renderTarget2]) rt.depthTexture = new THREE.DepthTexture(rt.width, rt.height);
@@ -146,14 +146,16 @@ export function makePost(r: THREE.WebGLRenderer, scene: THREE.Scene, cam: THREE.
   const vision = new VisionPass(cam);
   vision.enabled = false;
   composer.addPass(vision);
-  const ao = new GTAOPass(scene, cam, Math.round(w * aoScale), Math.round(h * aoScale));
-  ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.2, scale: 1.0 });
-  ao.blendIntensity = 0.9;
-  composer.addPass(ao);
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.6, 0.5, 1.0));
+  if (!fast) {
+    const ao = new GTAOPass(scene, cam, Math.round(w * aoScale), Math.round(h * aoScale));
+    ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.2, scale: 1.0 });
+    ao.blendIntensity = 0.9;
+    composer.addPass(ao);
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.6, 0.5, 1.0));
+  }
   composer.addPass(new OutputPass());
   composer.addPass(new ShaderPass(Vignette));
-  composer.addPass(new SMAAPass());
+  if (!fast) composer.addPass(new SMAAPass());
   composer.setSize(w, h);
   return {
     composer,

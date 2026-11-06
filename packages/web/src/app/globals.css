@@ -1372,13 +1372,14 @@ button:active:not(:disabled) { transform: translateY(1px); }
 .gal figcaption span { color: var(--muted); font-size: 9px; }
 @media (max-width: 960px) { .gal-grid { grid-template-columns: repeat(4,minmax(0,1fr)); } .mode-card { max-width: 236px; } }
 @media (max-width: 700px) {
-  .menu-stack { left: 24px; top: 40%; max-width: calc(100vw - 48px); }
+  .menu { display: flex; flex-direction: column; padding: 72px 24px 24px; overflow-y: auto; }
+  .menu-stack { left: 0; top: 0; max-width: none; height: auto; flex: 1 0 auto; padding: 24px 0; }
   .logo { font-size: clamp(68px,17vw,106px); }
   .menu-canvas { object-position: 64% 40%; }
   .menu-scrim { background: linear-gradient(0deg,rgba(9,18,22,.95),rgba(9,18,22,.34) 68%,rgba(9,18,22,.50)); }
   .tagline { font-size: 12px; max-width: 270px; }
   .btn-play { min-width: 210px; font-size: 16px; }
-  .mode-card { max-width: 260px; bottom: 16px; right: 16px; }
+  .mode-card { position: relative; max-width: none; width: 100%; bottom: auto; right: auto; flex-shrink: 0; }
   .mode-card header { padding: 8px 12px; }
   .mode-body { font-size: 10px; padding: 8px 12px; line-height: 1.55; }
   .shell { padding: 4px; gap: 4px; }

@@ -10,6 +10,7 @@ import { GameRoom, type Emit, type MeetingTimings } from './GameRoom.js';
 
 export interface GameServerConfig {
   contractAddress: string | null;
+  maxRooms?: number;
   /** Positions are broadcast every N ticks to keep bandwidth sane. */
   positionEveryTicks?: number;
   /** Meeting stage durations. Defaults to the shared constants. */
@@ -81,8 +82,46 @@ export class GameServer {
 
   private wire(): void {
     this.io.on('connection', (socket) => {
+      let budget = 180;
+      let lastPacket = performance.now();
+      socket.use((packet, next) => {
+        const now = performance.now();
+        budget = Math.min(180, budget + (now - lastPacket) * 0.09) - 1;
+        lastPacket = now;
+        const [event, ...args] = packet;
+        if (typeof args.at(-1) === 'function') args.pop();
+        const noPayload = ['startGame', 'callMeeting', 'voiceJoin', 'voiceLeave', 'leaveLobby'];
+        const fields: Record<string, Record<string, string>> = {
+          join: {}, input: { ax: 'number', ay: 'number', fx: 'number', fy: 'number', seq: 'number' },
+          completeTask: { taskId: 'string' }, taskProgress: {}, reportBody: { victimSeat: 'number' },
+          castVote: {}, purge: { targetSeat: 'number' }, jumpAnnounce: { targetSeat: 'number' },
+          reportChainGameId: { chainGameId: 'string' }, submitEjectionReveal: { wasParasite: 'boolean' },
+          sendChat: { text: 'string' }, voiceSignal: { to: 'string' },
+        };
+        const data = args[0];
+        const shapeOk = noPayload.includes(event)
+          ? args.length === 0
+          : Object.hasOwn(fields, event) && args.length === 1 && data !== null &&
+            typeof data === 'object' && !Array.isArray(data) &&
+            Object.entries(fields[event]!).every(([key, type]) => data[key] === undefined ||
+              (typeof data[key] === type && (type !== 'number' || Number.isFinite(data[key]))));
+        if (budget < 0 || !shapeOk) { socket.disconnect(true); return; }
+        next();
+      });
       socket.on('join', async (payload, ack) => {
+        if (!payload || typeof payload !== 'object' ||
+            (payload.code != null && (typeof payload.code !== 'string' || payload.code.length > 32)) ||
+            (payload.name != null && typeof payload.name !== 'string') ||
+            (payload.address != null && typeof payload.address !== 'string')) {
+          return ack?.({ ok: false, error: 'Please check your room code and name.' });
+        }
         const code = (payload?.code ?? 'VIRELIA').trim().toUpperCase() || 'VIRELIA';
+        if (this.socketRoom.has(socket.id)) {
+          return ack?.({ ok: false, error: 'Leave your current outpost before joining another.' });
+        }
+        if (!this.rooms.has(code) && this.rooms.size >= (this.config.maxRooms ?? 64)) {
+          return ack?.({ ok: false, error: 'All outposts are busy. Join an existing room or try again shortly.' });
+        }
         const room = this.getRoom(code);
         const { result, player } = room.join(
           socket.id,
